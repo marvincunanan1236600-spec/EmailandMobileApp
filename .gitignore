@@ -1,0 +1,27 @@
+# Python cache
+__pycache__/
+*.pyc
+
+# Virtual environment
+.venv/
+venv/
+
+# IDE / editor files
+.idea/
+*.iml
+
+# Databases
+*.db
+
+# JSON runtime files
+*.json
+
+# User uploads / static content (optional)
+static/uploads/
+
+# Environment variables
+.env
+
+# OS files
+.DS_Store
+Thumbs.db

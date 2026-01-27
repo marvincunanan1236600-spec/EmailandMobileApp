@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Admin Dashboard</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            background: linear-gradient(rgba(0,0,0,0.4), rgba(0,0,0,0.4)),
+                        url("{{ url_for('static', filename='Lcc.jpg') }}") no-repeat center center fixed;
+            background-size: cover;
+            color: #333;
+        }
+
+        .container {
+    max-width: 1200px;
+    margin: 50px auto;
+    background: rgba(255, 255, 255, 0.2); /* really transparent container */
+    padding: 30px;
+    border-radius: 10px;
+    border: 2px solid rgba(255, 255, 255, 0.2); /* subtle transparent border */
+    box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+    backdrop-filter: blur(5px);
+}
+
+.table-wrapper {
+    overflow-x: auto;
+    width: 100%;
+    margin-top: 20px;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 1200px;
+    background-color: white; /* table stays solid white */
+}
+
+th, td {
+    border: 1px solid #ddd;
+    padding: 10px;
+    text-align: center;
+    white-space: nowrap;
+}
+
+th {
+    background-color: #007bff;
+    color: white;
+}
+
+tr:nth-child(even) {
+    background-color: rgba(0,0,0,0.03);
+}
+
+tr:hover {
+    background-color: rgba(0,123,255,0.1);
+}
+
+
+
+        h1 {
+    text-align: center;
+    margin-bottom: 30px;
+    color: #007bff;
+    border: 2px solid rgba(255, 255, 255, 0.8); /* white border with slight transparency */
+    display: inline-block; /* shrink border to fit text */
+    padding: 10px 20px;
+    border-radius: 10px;
+    background-color: rgba(255, 255, 255, 0.1); /* optional slight background for contrast */
+}
+
+
+        .buttons {
+            margin-bottom: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        .buttons a {
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border-radius: 25px;
+            text-decoration: none;
+            font-weight: bold;
+            transition: background-color 0.3s, transform 0.2s;
+        }
+
+        .buttons a:hover {
+            background-color: #0056b3;
+            transform: translateY(-2px);
+        }
+
+        .edit-btn {
+            background-color: #28a745;
+        }
+
+        .edit-btn:hover {
+            background-color: #218838;
+        }
+
+        /* Make table horizontally scrollable */
+        .table-wrapper {
+            overflow-x: auto;
+            width: 100%;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            min-width: 1200px; /* ensures scroll appears if screen is smaller */
+        }
+
+        th, td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: center;
+            white-space: nowrap; /* prevents text from wrapping */
+        }
+
+        th {
+            background-color: #007bff;
+            color: white;
+        }
+
+        tr:nth-child(even) {
+            background-color: rgba(0,0,0,0.03);
+        }
+
+        tr:hover {
+            background-color: rgba(0,123,255,0.1);
+        }
+
+        @media (max-width: 768px) {
+            .buttons {
+                flex-direction: column;
+                align-items: center;
+            }
+            th, td {
+                padding: 6px;
+                font-size: 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Admin Dashboard</h1>
+
+        <div class="buttons">
+            <!-- Button to edit homepage content -->
+            <a href="{{ url_for('edit_homepage') }}" class="edit-btn">Edit Homepage Content</a>
+
+            <!-- Filters & CSV -->
+            <a href="{{ url_for('admin_dashboard') }}">All</a>
+            <a href="{{ url_for('admin_dashboard', filter='week') }}">Last 7 Days</a>
+            <a href="{{ url_for('admin_dashboard', filter='month') }}">Last Month</a>
+            <a href="{{ url_for('admin_dashboard', filter='year') }}">Last Year</a>
+            <a href="{{ url_for('download_csv', filter=filter_type) }}">Download CSV</a>
+        </div>
+
+        <div class="table-wrapper">
+            <table>
+                <tr>
+                    <th>ID</th><th>Name</th><th>Reason</th><th>Person to Visit</th>
+                    <th>Date</th><th>Time</th><th>Valid ID</th><th>VIEW</th><th>Email</th>
+                    <th>Time In</th><th>Time Out</th><th>Created At</th>
+                </tr>
+                {% for visitor in visitors %}
+                <tr>
+                    <td>{{ visitor[0] }}</td>
+                    <td>{{ visitor[1] }}</td>
+                    <td>{{ visitor[2] }}</td>
+                    <td>{{ visitor[3] }}</td>
+                    <td>{{ visitor[4] }}</td>
+                    <td>{{ visitor[5] }}</td>
+                    <td>{{ visitor[6] }}</td>
+                    <td>
+                        {% if visitor[6] %}
+                            <a href="{{ url_for('static', filename='uploads/' ~ visitor[6]) }}" target="_blank">View ID</a>
+                        {% else %}
+                            No ID
+                        {% endif %}
+                    </td>
+                    <td>{{ visitor[7] }}</td>
+                    <td>{{ visitor[8] }}</td>
+                    <td>{{ visitor[9] }}</td>
+                    <td>{{ visitor[10] }}</td>
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
+    </div>
+</body>
+</html>

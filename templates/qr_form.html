@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>QR Code Generator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segue UI', Tahoma, Geneva, Verdana, sans-serif;
+           background-image: url("{{ url_for('static', filename='Lcc.jpg') }}");
+            background-size: cover;       /* make it cover full screen */
+            background-position: center;  /* center the image */
+            background-repeat: no-repeat; /* prevent tiling */
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 40px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header {
+         background: linear-gradient(135deg, #00c6ff 0%, #0072ff 100%);
+         color: white;
+         padding: 40px 30px;
+          text-align: center;
+         }
+
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+        .form-content {
+            padding: 40px;
+        }
+        .form-group {
+            margin-bottom: 25px;
+        }
+        label {
+            font-weight: 600;
+            color: white;
+            display: block;
+            margin-bottom: 8px;
+            font-size: 1.1em;
+        }
+        input, textarea, select {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e1e8ed;
+            border-radius: 12px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            background: #f8f9fa;
+        }
+        input:focus, textarea:focus, select:focus {
+            outline: none;
+            border-color: #4face;
+            background: white;
+            box-shadow: 0 0 0 4px rgba(79, 172, 254, 0.1);
+        }
+        textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+        button {
+            width: 100%;
+            background: #4CAF50;
+            color: white;
+            padding: 18px;
+            border: none;
+            border-radius: 12px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+        }
+        button:active {
+            transform: translateY(0);
+        }
+        .required {
+            color: #e74c3c;
+        }
+        @media (max-width: 768px) {
+            .container {
+                margin: 0;
+                border-radius: 0;
+            }
+            .header {
+                padding: 30px 20px;
+            }
+            .form-content {
+                padding: 30px 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎓 Visitor Registration</h1>
+            <button onclick="window.location.href='/'"
+        style="position:fixed;top:10px;left:10px;padding:10px 10px;font-size:20px;border:none;border-radius:4px;background:#667eea;color:white;cursor:pointer;z-index:1000;width:auto;">
+    ← Back
+</button>
+
+
+
+            <p>Fill out the form to get your visitor QR code</p>
+        </div>
+
+        <div class="form-content">
+            <form method="POST" action="/send_verification" enctype="multipart/form-data">
+                <div class="form-group">
+                    <label>Full Name <span class="required">*</span></label>
+                    <input type="text" name="name" placeholder="Enter your full name" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Reason for Visit <span class="required">*</span></label>
+                    <textarea name="reason" placeholder="Why are you visiting?" required></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label>Person to Visit <span class="required">*</span></label>
+                    <input type="text" name="person_to_visit" placeholder="Who are you visiting?" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Date of Visit <span class="required">*</span></label>
+                    <input type="date" name="visit_date" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Time of Visit <span class="required">*</span></label>
+                    <input type="time" name="visit_time" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Upload Valid ID <span class="required">*</span></label>
+                    <input type="file" name="valid_id" accept="image/*,.pdf" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Email Address <span class="required">*</span></label>
+                    <input type="email" name="email" placeholder="Enter your Gmail address" required>
+                </div>
+
+                <button type="submit">Generate My QR Code ✨</button>
+            </form>
+        </div>
+    </div>
+<script>
+function goBack() {
+    window.history.back();
+}
+</script>
+
+</body>
+</html>

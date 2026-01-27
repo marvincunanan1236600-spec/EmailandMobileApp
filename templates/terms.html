@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Terms & Conditions</title>
+
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background:
+                linear-gradient(rgba(0,0,0,0.6), rgba(0,0,0,0.6)),
+                url("{{ url_for('static', filename='Cbus.jpg') }}");
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            color: white;
+            padding: 40px;
+        }
+
+        .container {
+            max-width: 750px;
+            margin: auto;
+            background: rgba(255,255,255,0.15);
+            padding: 30px;
+            border-radius: 16px;
+            backdrop-filter: blur(12px);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            animation: fadeIn 0.6s ease;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 32px;
+        }
+
+        .content-box {
+            background: rgba(255,255,255,0.85);
+            color: #333;
+            padding: 20px;
+            border-radius: 12px;
+            max-height: 350px;
+            overflow-y: auto;
+            box-shadow: inset 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .content-box p, .content-box li {
+            font-size: 16px;
+            line-height: 1.7;
+            margin-bottom: 15px;
+        }
+
+        .notice {
+            margin-top: 15px;
+            font-size: 14px;
+            font-style: italic;
+            opacity: 0.8;
+            text-align: center;
+        }
+
+        .checkbox-area {
+            margin-top: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 16px;
+        }
+
+        button {
+            width: 100%;
+            margin-top: 20px;
+            padding: 14px;
+            font-size: 18px;
+            font-weight: bold;
+            border: none;
+            border-radius: 25px;
+            cursor: not-allowed;
+            background: rgba(255,255,255,0.4);
+            color: #888;
+            transition: 0.3s;
+        }
+
+        button.enabled {
+            background: white;
+            color: #667eea;
+            cursor: pointer;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+        }
+
+        button.enabled:hover {
+            transform: translateY(-2px);
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Terms & Conditions</h1>
+
+    <div class="content-box" id="termsBox">
+        <p>Welcome to La Concepcion College's Online Appointment System. Before proceeding, please review the following Terms & Conditions:</p>
+
+        <ul>
+            <li>All visitors are required to provide **complete and accurate information**.</li>
+            <li>Appointments must be scheduled **at least 24 hours before** the intended visit.</li>
+            <li>You will receive a QR code via email — this must be presented upon arrival at the school gate.</li>
+            <li>All visits are subject to approval by the LCC Administration Office.</li>
+            <li>Falsifying information may result in email blacklisting and denied entry.</li>
+            <li>The administration reserves the right to cancel appointments at any time.</li>
+            <li>Visitors must comply with school safety and security protocols at all times.</li>
+        </ul>
+
+        <p>By agreeing to these Terms, you confirm that you understand the policies and requirements set by La Concepcion College.</p>
+    </div>
+
+    <p class="notice">Scroll to the bottom to enable the agreement checkbox.</p>
+
+    <form action="/accept_terms" method="POST">
+        <div class="checkbox-area">
+            <input type="checkbox" id="agree" disabled>
+            <label for="agree">I have read and agree to the Terms & Conditions.</label>
+        </div>
+
+        <button id="continueBtn" disabled>Continue</button>
+    </form>
+</div>
+
+<script>
+    const termsBox = document.getElementById('termsBox');
+    const agreeCheckbox = document.getElementById('agree');
+    const continueBtn = document.getElementById('continueBtn');
+
+    // Unlock checkbox after scrolling to bottom
+    termsBox.addEventListener('scroll', function() {
+        if (termsBox.scrollTop + termsBox.clientHeight >= termsBox.scrollHeight - 10) {
+            agreeCheckbox.disabled = false;
+        }
+    });
+
+    // Unlock Continue button after checkbox is checked
+    agreeCheckbox.addEventListener('change', function() {
+        if (agreeCheckbox.checked) {
+            continueBtn.disabled = false;
+            continueBtn.classList.add('enabled');
+        } else {
+            continueBtn.disabled = true;
+            continueBtn.classList.remove('enabled');
+        }
+    });
+</script>
+
+</body>
+</html>
