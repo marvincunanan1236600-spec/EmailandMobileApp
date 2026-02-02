@@ -84,10 +84,11 @@ init_admin_database()
 init_homepage_database()
 
 # ---------------- EMAIL SETTINGS ----------------
-EMAIL_ADDRESS = 'marvincunanan1236600@gmail.com'
-EMAIL_PASSWORD = 'ntdvqukkehuzbuca'  # App Password
+EMAIL_ADDRESS = os.environ.get("EMAIL_USER")
+EMAIL_PASSWORD = os.environ.get("EMAIL_PASS")
 
 def send_email_otp(to_email, otp):
+    print("📧 Attempting to send OTP email...")
     msg = MIMEText(f"""
 Dear Visitor,
 
