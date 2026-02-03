@@ -1,9 +1,11 @@
 import csv
 from flask import Flask, render_template, request, redirect, session, send_from_directory, Response
-import os, smtplib, random, sqlite3, qrcode, io, base64
+import os, random, sqlite3, qrcode, io, base64
 from werkzeug.utils import secure_filename
-from email.mime.text import MIMEText
 from datetime import datetime, timedelta
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail
+
 
 app = Flask(__name__)
 app.secret_key = 'supersecretkey'
@@ -85,30 +87,30 @@ init_homepage_database()
 
 # ---------------- EMAIL SETTINGS ----------------
 EMAIL_ADDRESS = os.environ.get("EMAIL_USER")
-EMAIL_PASSWORD = os.environ.get("EMAIL_PASS")
+SENDGRID_API_KEY = os.environ.get("SENDGRID_API_KEY")
 
 def send_email_otp(to_email, otp):
-    print("📧 Attempting to send OTP email...")
-    msg = MIMEText(f"""
-Dear Visitor,
-
-Thank you for using the Gate Pass Appointment System.
-
-Your One-Time Verification Code (OTP) is: {otp}
-
-Please enter this code on Appointment website to verify your email address and continue your appointment request.
-
-If you did not attempt to register, please ignore this message.
-
-Best regards,  
-Gate Pass System Team
-""")
-    msg['Subject'] = 'Email Verification Code'
-    msg['From'] = EMAIL_ADDRESS
-    msg['To'] = to_email
-    with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
-        smtp.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
-        smtp.send_message(msg)
+    print("📧 Attempting to send OTP email via SendGrid...")
+    message = Mail(
+        from_email=EMAIL_ADDRESS,
+        to_emails=to_email,
+        subject='Email Verification Code',
+        html_content=f"""
+        <p>Dear Visitor,</p>
+        <p>Thank you for using the Gate Pass Appointment System.</p>
+        <p>Your One-Time Verification Code (OTP) is: <b>{otp}</b></p>
+        <p>Please enter this code on Appointment website to verify your email address and continue your appointment request.</p>
+        <p>If you did not attempt to register, please ignore this message.</p>
+        <p>Best regards,<br>Gate Pass System Team</p>
+        """
+    )
+    try:
+        sg = SendGridAPIClient(SENDGRID_API_KEY)
+        response = sg.send(message)
+        print("📧 Email sent successfully!", response.status_code)
+    except Exception as e:
+        print("Error sending email via SendGrid:", e)
+        raise e
 
 def generate_otp():
     return str(random.randint(100000, 999999))
