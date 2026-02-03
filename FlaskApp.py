@@ -109,8 +109,9 @@ def send_email_otp(to_email, otp):
         response = sg.send(message)
         print("📧 Email sent successfully!", response.status_code)
     except Exception as e:
-        print("Error sending email via SendGrid:", e)
-        raise e
+        print("SENDGRID ERROR:", str(e))
+        return f"SendGrid Error: {e}"
+
 
 def generate_otp():
     return str(random.randint(100000, 999999))
