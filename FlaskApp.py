@@ -6,7 +6,6 @@ from datetime import datetime, timedelta
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 
-
 app = Flask(__name__)
 app.secret_key = 'supersecretkey'
 
@@ -14,6 +13,7 @@ app.secret_key = 'supersecretkey'
 UPLOAD_FOLDER = os.path.join('static', 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
 
 # ---------------- DATABASES ----------------
 def init_visitor_database():
@@ -38,6 +38,7 @@ def init_visitor_database():
     conn.commit()
     conn.close()
 
+
 def init_admin_database():
     conn = sqlite3.connect('admin.db')
     cursor = conn.cursor()
@@ -52,6 +53,7 @@ def init_admin_database():
     cursor.execute('INSERT OR IGNORE INTO admin (username, password) VALUES (?, ?)', ('admin', '12345'))
     conn.commit()
     conn.close()
+
 
 def init_homepage_database():
     conn = sqlite3.connect('visitors.db')  # same database as visitors
@@ -80,6 +82,7 @@ def init_homepage_database():
     conn.commit()
     conn.close()
 
+
 # Initialize databases
 init_visitor_database()
 init_admin_database()
@@ -89,32 +92,64 @@ init_homepage_database()
 EMAIL_ADDRESS = os.environ.get("EMAIL_USER")
 SENDGRID_API_KEY = os.environ.get("SENDGRID_API_KEY")
 
+
 def send_email_otp(to_email, otp):
+    """
+    Send OTP email via SendGrid
+    Returns: (success: bool, message: str)
+    """
     print("📧 Attempting to send OTP email via SendGrid...")
+    print(f"📧 From: {EMAIL_ADDRESS}")
+    print(f"📧 To: {to_email}")
+
+    # Check if credentials are set
+    if not EMAIL_ADDRESS:
+        error_msg = "EMAIL_USER environment variable is not set"
+        print(f"❌ {error_msg}")
+        return False, error_msg
+
+    if not SENDGRID_API_KEY:
+        error_msg = "SENDGRID_API_KEY environment variable is not set"
+        print(f"❌ {error_msg}")
+        return False, error_msg
+
     message = Mail(
         from_email=EMAIL_ADDRESS,
         to_emails=to_email,
-        subject='Email Verification Code',
+        subject='Email Verification Code - La Concepcion College',
         html_content=f"""
-        <p>Dear Visitor,</p>
-        <p>Thank you for using the Gate Pass Appointment System.</p>
-        <p>Your One-Time Verification Code (OTP) is: <b>{otp}</b></p>
-        <p>Please enter this code on Appointment website to verify your email address and continue your appointment request.</p>
-        <p>If you did not attempt to register, please ignore this message.</p>
-        <p>Best regards,<br>Gate Pass System Team</p>
+        <html>
+        <body>
+            <p>Dear Visitor,</p>
+            <p>Thank you for using the Gate Pass Appointment System.</p>
+            <p>Your One-Time Verification Code (OTP) is: <b style="font-size: 24px; color: #0066cc;">{otp}</b></p>
+            <p>Please enter this code on the Appointment website to verify your email address and continue your appointment request.</p>
+            <p>This code will expire in 10 minutes.</p>
+            <p>If you did not attempt to register, please ignore this message.</p>
+            <br>
+            <p>Best regards,<br>Gate Pass System Team<br>La Concepcion College</p>
+        </body>
+        </html>
         """
     )
+
     try:
         sg = SendGridAPIClient(SENDGRID_API_KEY)
         response = sg.send(message)
-        print("📧 Email sent successfully!", response.status_code)
+        print(f"✅ Email sent successfully! Status code: {response.status_code}")
+        return True, "Email sent successfully"
     except Exception as e:
-        print("SENDGRID ERROR:", str(e))
-        return f"SendGrid Error: {e}"
+        error_msg = f"SendGrid Error: {str(e)}"
+        print(f"❌ {error_msg}")
+        # Print more details for debugging
+        if hasattr(e, 'body'):
+            print(f"❌ Error body: {e.body}")
+        return False, error_msg
 
 
 def generate_otp():
     return str(random.randint(100000, 999999))
+
 
 # ---------------- ROUTES ----------------
 
@@ -129,6 +164,7 @@ def index():
     conn.close()
     return render_template('index.html', homepage=homepage_content)
 
+
 # Appointment form
 @app.route('/appointment')
 def appointment():
@@ -140,6 +176,7 @@ def appointment():
 @app.route('/terms')
 def terms():
     return render_template('terms.html')
+
 
 @app.route('/accept_terms', methods=['POST'])
 def accept_terms():
@@ -207,20 +244,41 @@ def send_verification():
         conn.close()
         return redirect('/generate_qr_form')
 
+    # Generate and send OTP
     otp = generate_otp()
     session['otp'] = otp
-    try:
-        send_email_otp(email, otp)
+    session['otp_timestamp'] = datetime.now().timestamp()  # For expiration checking
+
+    # Send email with proper error handling
+    success, message = send_email_otp(email, otp)
+
+    if success:
         return render_template('verify_email.html', email=email)
-    except Exception as e:
-        print("Error sending email:", e)
-        return "Error sending email."
+    else:
+        # Return error page with detailed message
+        error_message = f"❌ Failed to send verification email. {message}"
+        print(error_message)
+        return render_template('Error.html', message=error_message)
+
 
 # Verify OTP
 @app.route('/verify_otp', methods=['POST'])
 def verify_otp():
     entered_otp = request.form['otp']
-    if entered_otp == session.get('otp'):
+    stored_otp = session.get('otp')
+    otp_timestamp = session.get('otp_timestamp')
+
+    # Check if OTP exists
+    if not stored_otp:
+        return render_template('Error.html', message="❌ OTP session expired. Please request a new code.")
+
+    # Check if OTP is expired (10 minutes)
+    if otp_timestamp:
+        elapsed_time = datetime.now().timestamp() - otp_timestamp
+        if elapsed_time > 600:  # 10 minutes
+            return render_template('Error.html', message="❌ OTP has expired. Please request a new code.")
+
+    if entered_otp == stored_otp:
         visitor_info = session.get('visitor_info')
         filename = session.get('valid_id_filename')
         conn = sqlite3.connect('visitors.db')
@@ -243,9 +301,15 @@ def verify_otp():
         conn.commit()
         conn.close()
         session['verified_email'] = visitor_info['email']
+
+        # Clear OTP from session
+        session.pop('otp', None)
+        session.pop('otp_timestamp', None)
+
         return redirect('/generate_qr_form')
     else:
-        return "❌ Invalid OTP. Please try again."
+        return render_template('Error.html', message="❌ Invalid OTP. Please try again or request a new code.")
+
 
 # QR Generation
 @app.route('/generate_qr_form')
@@ -269,10 +333,12 @@ def generate_qr_form():
     qr_code = base64.b64encode(buffer.getvalue()).decode('utf-8')
     return render_template('qr_result.html', qr_code=qr_code, visitor_info=visitor_info, valid_id=filename)
 
+
 # View uploaded file
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
 
 # ---------------- ADMIN ROUTES ----------------
 @app.route('/admin/login', methods=['GET', 'POST'])
@@ -292,10 +358,12 @@ def admin_login():
             return render_template('admin_login.html', error="Invalid credentials.")
     return render_template('admin_login.html')
 
+
 @app.route('/admin/logout')
 def admin_logout():
     session.pop('admin', None)
     return redirect('/admin/login')
+
 
 # Admin dashboard
 @app.route('/admin/dashboard', methods=['GET'])
@@ -326,6 +394,7 @@ def admin_dashboard():
     conn.close()
     return render_template('admin_dashboard.html', visitors=visitors, filter_type=filter_type)
 
+
 # Download CSV
 @app.route('/admin/download_csv')
 def download_csv():
@@ -355,7 +424,9 @@ def download_csv():
     def generate():
         data = io.StringIO()
         writer = csv.writer(data)
-        writer.writerow(['ID','Name','Reason','Person to Visit','Date','Time','Email','Valid ID','Time In','Time Out','Created At'])
+        writer.writerow(
+            ['ID', 'Name', 'Reason', 'Person to Visit', 'Date', 'Time', 'Email', 'Valid ID', 'Time In', 'Time Out',
+             'Created At'])
         yield data.getvalue()
         data.seek(0)
         data.truncate(0)
@@ -366,7 +437,9 @@ def download_csv():
             data.truncate(0)
 
     filename = f"visitors_{filter_type if filter_type else 'all'}.csv"
-    return Response(generate(), mimetype='text/csv', headers={"Content-Disposition": f"attachment; filename={filename}"})
+    return Response(generate(), mimetype='text/csv',
+                    headers={"Content-Disposition": f"attachment; filename={filename}"})
+
 
 # Edit homepage content
 @app.route('/admin/edit_homepage', methods=['GET', 'POST'])
@@ -388,6 +461,7 @@ def edit_homepage():
     homepage_content = {row[0]: row[1] for row in rows}
     conn.close()
     return render_template('edit_homepage.html', homepage=homepage_content)
+
 
 # Run Flask
 if __name__ == "__main__":
