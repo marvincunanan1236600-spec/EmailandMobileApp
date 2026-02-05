@@ -329,7 +329,7 @@ def generate_qr_form():
     )
     qr = qrcode.make(qr_data)
     buffer = io.BytesIO()
-    qr.save(buffer, format='PNG')
+    qr.save(buffer)
     qr_code = base64.b64encode(buffer.getvalue()).decode('utf-8')
     return render_template('qr_result.html', qr_code=qr_code, visitor_info=visitor_info, valid_id=filename)
 
