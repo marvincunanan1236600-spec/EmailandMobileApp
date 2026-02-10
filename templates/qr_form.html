@@ -9,11 +9,11 @@
             box-sizing: border-box;
         }
         body {
-            font-family: 'Segue UI', Tahoma, Geneva, Verdana, sans-serif;
-           background-image: url("{{ url_for('static', filename='Lcc.jpg') }}");
-            background-size: cover;       /* make it cover full screen */
-            background-position: center;  /* center the image */
-            background-repeat: no-repeat; /* prevent tiling */
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-image: url("{{ url_for('static', filename='Lcc.jpg') }}");
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
             min-height: 100vh;
             padding: 20px;
         }
@@ -26,19 +26,15 @@
             overflow: hidden;
         }
         .header {
-         background: linear-gradient(135deg, #00c6ff 0%, #0072ff 100%);
-         color: white;
-         padding: 40px 30px;
-          text-align: center;
-         }
-
-
+            background: linear-gradient(135deg, #00c6ff 0%, #0072ff 100%);
+            color: white;
+            padding: 40px 30px;
+            text-align: center;
+        }
         .header h1 {
             font-size: 2.5em;
             margin-bottom: 10px;
         }
-
-
         .header p {
             font-size: 1.1em;
             opacity: 0.9;
@@ -121,9 +117,6 @@
         style="position:fixed;top:10px;left:10px;padding:10px 10px;font-size:20px;border:none;border-radius:4px;background:#667eea;color:white;cursor:pointer;z-index:1000;width:auto;">
     ← Back
 </button>
-
-
-
             <p>Fill out the form to get your visitor QR code</p>
         </div>
 
@@ -142,6 +135,17 @@
                 <div class="form-group">
                     <label>Person to Visit <span class="required">*</span></label>
                     <input type="text" name="person_to_visit" placeholder="Who are you visiting?" required>
+                </div>
+
+                <!-- NEW DEPARTMENT DROPDOWN -->
+                <div class="form-group">
+                    <label>Department <span class="required">*</span></label>
+                    <select name="department" required>
+                        <option value="">-- Select Department --</option>
+                        <option value="BSIS">BSIS</option>
+                        <option value="CRIM">CRIM</option>
+                        <option value="BSA">BSA</option>
+                    </select>
                 </div>
 
                 <div class="form-group">
@@ -168,11 +172,11 @@
             </form>
         </div>
     </div>
+
 <script>
 function goBack() {
     window.history.back();
 }
 </script>
-
 </body>
 </html>

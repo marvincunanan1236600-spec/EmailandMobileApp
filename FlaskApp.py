@@ -25,12 +25,14 @@ def init_visitor_database():
             name TEXT NOT NULL,
             reason TEXT NOT NULL,
             person_to_visit TEXT NOT NULL,
+            department TEXT NOT NULL,
             visit_date TEXT NOT NULL,
             visit_time TEXT NOT NULL,
             email TEXT NOT NULL,
             valid_id TEXT,
             time_in TEXT,
             time_out TEXT,
+            status TEXT DEFAULT 'Pending',  -- Pending, Approved, Declined
             created_at TEXT NOT NULL,
             is_verified INTEGER DEFAULT 0
         )
@@ -46,11 +48,16 @@ def init_admin_database():
         CREATE TABLE IF NOT EXISTS admin (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL
+            password TEXT NOT NULL,
+            role TEXT NOT NULL  -- admin, guard, dep_head
         )
     ''')
-    # Default admin account
-    cursor.execute('INSERT OR IGNORE INTO admin (username, password) VALUES (?, ?)', ('admin', '12345'))
+    # Default accounts
+    cursor.execute('INSERT OR IGNORE INTO admin (username, password, role) VALUES (?, ?, ?)', ('admin', '12345', 'admin'))
+    cursor.execute('INSERT OR IGNORE INTO admin (username, password, role) VALUES (?, ?, ?)', ('guard', '12345', 'guard'))
+    cursor.execute('INSERT OR IGNORE INTO admin (username, password, role) VALUES (?, ?, ?)', ('bsis_head', '12345', 'dep_head'))
+    cursor.execute('INSERT OR IGNORE INTO admin (username, password, role) VALUES (?, ?, ?)', ('crim_head', '12345', 'dep_head'))
+    cursor.execute('INSERT OR IGNORE INTO admin (username, password, role) VALUES (?, ?, ?)', ('bsa_head', '12345', 'dep_head'))
     conn.commit()
     conn.close()
 
@@ -87,6 +94,7 @@ def init_homepage_database():
 init_visitor_database()
 init_admin_database()
 init_homepage_database()
+
 
 # ---------------- EMAIL SETTINGS ----------------
 EMAIL_ADDRESS = os.environ.get("EMAIL_USER")
@@ -208,6 +216,7 @@ def send_verification():
         'name': name,
         'reason': request.form['reason'],
         'person_to_visit': request.form['person_to_visit'],
+        'department': request.form['department'],  # <-- new
         'visit_date': visit_date,
         'visit_time': visit_time,
         'email': email
