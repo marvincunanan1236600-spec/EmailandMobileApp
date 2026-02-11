@@ -167,32 +167,37 @@ tr:hover {
         <div class="table-wrapper">
             <table>
                 <tr>
-                    <th>ID</th><th>Name</th><th>Reason</th><th>Person to Visit</th>
+                    <th>ID</th><th>Name</th><th>Reason</th><th>Department</th><th>Person to Visit</th>
                     <th>Date</th><th>Time</th><th>Valid ID</th><th>VIEW</th><th>Email</th>
                     <th>Time In</th><th>Time Out</th><th>Created At</th>
                 </tr>
+
                 {% for visitor in visitors %}
-                <tr>
-                    <td>{{ visitor[0] }}</td>
-                    <td>{{ visitor[1] }}</td>
-                    <td>{{ visitor[2] }}</td>
-                    <td>{{ visitor[3] }}</td>
-                    <td>{{ visitor[4] }}</td>
-                    <td>{{ visitor[5] }}</td>
-                    <td>{{ visitor[6] }}</td>
-                    <td>
-                        {% if visitor[6] %}
-                            <a href="{{ url_for('static', filename='uploads/' ~ visitor[6]) }}" target="_blank">View ID</a>
-                        {% else %}
-                            No ID
-                        {% endif %}
-                    </td>
-                    <td>{{ visitor[7] }}</td>
-                    <td>{{ visitor[8] }}</td>
-                    <td>{{ visitor[9] }}</td>
-                    <td>{{ visitor[10] }}</td>
-                </tr>
-                {% endfor %}
+    <tr>
+    <td>{{ visitor[0] }}</td>  <!-- id -->
+    <td>{{ visitor[1] }}</td>  <!-- name -->
+    <td>{{ visitor[2] }}</td>  <!-- reason -->
+    <td>{{ visitor[3] }}</td>  <!-- department -->
+    <td>{{ visitor[4] }}</td>  <!-- person_to_visit -->
+    <td>{{ visitor[5] }}</td>  <!-- visit_date -->
+    <td>{{ visitor[6] }}</td>  <!-- visit_time -->
+    <td>{{ visitor[8] }}</td>  <!-- valid_id -->
+
+    <td>
+        {% if visitor[8] %}
+            <a href="{{ url_for('static', filename='uploads/' ~ visitor[8]) }}" target="_blank">View ID</a>
+        {% else %}
+            No ID
+        {% endif %}
+    </td>
+
+    <td>{{ visitor[7] }}</td>  <!-- email -->
+    <td>{{ visitor[9] }}</td>  <!-- time_in -->
+    <td>{{ visitor[10] }}</td> <!-- time_out -->
+    <td>{{ visitor[11] }}</td> <!-- created_at -->
+    </tr>
+            {% endfor %}
+
             </table>
         </div>
     </div>

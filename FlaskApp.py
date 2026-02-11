@@ -333,6 +333,7 @@ def generate_qr_form():
         f"Name: {visitor_info['name']}\n"
         f"Reason: {visitor_info['reason']}\n"
         f"Person to Visit: {visitor_info['person_to_visit']}\n"
+        f"Department: {visitor_info['department']}\n"
         f"Date: {visitor_info['visit_date']}\n"
         f"Time: {visitor_info['visit_time']}\n"
         f"Email: {visitor_info['email']}\n"
