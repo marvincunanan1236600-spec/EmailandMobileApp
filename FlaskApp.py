@@ -294,12 +294,13 @@ def verify_otp():
         cursor = conn.cursor()
         cursor.execute("UPDATE visitors SET is_verified=1 WHERE email=?", (visitor_info['email'],))
         cursor.execute('''
-            INSERT INTO visitors (name, reason, person_to_visit, visit_date, visit_time, email, valid_id, created_at, is_verified)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO visitors (name, reason, person_to_visit, department, visit_date, visit_time, email, valid_id, created_at, is_verified)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             visitor_info['name'],
             visitor_info['reason'],
             visitor_info['person_to_visit'],
+            visitor_info['department'],  # ← ADD THIS
             visitor_info['visit_date'],
             visitor_info['visit_time'],
             visitor_info['email'],
@@ -307,6 +308,7 @@ def verify_otp():
             datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
             1
         ))
+
         conn.commit()
         conn.close()
         session['verified_email'] = visitor_info['email']
