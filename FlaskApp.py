@@ -236,12 +236,13 @@ def send_verification():
         conn = sqlite3.connect('visitors.db')
         cursor = conn.cursor()
         cursor.execute('''
-            INSERT INTO visitors (name, reason, person_to_visit, visit_date, visit_time, email, valid_id, created_at, is_verified)
+            INSERT INTO visitors (name, reason, person_to_visit, department, visit_date, visit_time, email, valid_id, created_at, is_verified)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             name,
             session['visitor_info']['reason'],
             session['visitor_info']['person_to_visit'],
+            session['visitor_info']['department'],
             visit_date,
             visit_time,
             email,
@@ -317,7 +318,7 @@ def verify_otp():
         session.pop('otp', None)
         session.pop('otp_timestamp', None)
 
-        return redirect('/generate_qr_form')
+        return render_template('pending_approval.html')
     else:
         return render_template('Error.html', message="❌ Invalid OTP. Please try again or request a new code.")
 
@@ -405,6 +406,73 @@ def admin_dashboard():
     visitors = cursor.fetchall()
     conn.close()
     return render_template('admin_dashboard.html', visitors=visitors, filter_type=filter_type)
+
+@app.route('/admin/approve/<int:visitor_id>')
+def approve_visitor(visitor_id):
+    if 'admin' not in session:
+        return redirect('/admin/login')
+
+    conn = sqlite3.connect('visitors.db')
+    cursor = conn.cursor()
+
+    cursor.execute("UPDATE visitors SET status='Approved' WHERE id=?", (visitor_id,))
+    conn.commit()
+
+    cursor.execute("SELECT email FROM visitors WHERE id=?", (visitor_id,))
+    email = cursor.fetchone()[0]
+    conn.close()
+
+    # Send approval email with QR link
+    qr_link = f"https://emailandmobileapp.onrender.com/generate_qr/{visitor_id}"
+
+    message = Mail(
+        from_email=EMAIL_ADDRESS,
+        to_emails=email,
+        subject="Visit Approved - La Concepcion College",
+        html_content=f"""
+        <p>Your visit has been approved.</p>
+        <p>Please save your QR code here:</p>
+        <a href="{qr_link}">{qr_link}</a>
+        """
+    )
+
+    try:
+        sg = SendGridAPIClient(SENDGRID_API_KEY)
+        sg.send(message)
+    except Exception as e:
+        print("Email sending failed:", e)
+
+    return redirect('/admin/dashboard')
+
+@app.route('/admin/decline/<int:visitor_id>')
+def decline_visitor(visitor_id):
+    if 'admin' not in session:
+        return redirect('/admin/login')
+
+    conn = sqlite3.connect('visitors.db')
+    cursor = conn.cursor()
+
+    cursor.execute("UPDATE visitors SET status='Declined' WHERE id=?", (visitor_id,))
+    conn.commit()
+
+    cursor.execute("SELECT email FROM visitors WHERE id=?", (visitor_id,))
+    email = cursor.fetchone()[0]
+    conn.close()
+
+    message = Mail(
+        from_email=EMAIL_ADDRESS,
+        to_emails=email,
+        subject="Visit Declined",
+        html_content="<p>We are sorry, your visit request was declined.</p>"
+    )
+
+    try:
+        sg = SendGridAPIClient(SENDGRID_API_KEY)
+        sg.send(message)
+    except Exception as e:
+        print("Email sending failed:", e)
+
+    return redirect('/admin/dashboard')
 
 
 # Download CSV

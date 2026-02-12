@@ -166,22 +166,33 @@ tr:hover {
 
         <div class="table-wrapper">
             <table>
-                <tr>
-                    <th>ID</th><th>Name</th><th>Reason</th><th>Department</th><th>Person to Visit</th>
-                    <th>Date</th><th>Time</th><th>Valid ID</th><th>VIEW</th><th>Email</th>
-                    <th>Time In</th><th>Time Out</th><th>Created At</th>
-                </tr>
+<tr>
+    <th>ID</th>
+    <th>Name</th>
+    <th>Reason</th>
+    <th>Department</th>
+    <th>Person to Visit</th>
+    <th>Date</th>
+    <th>Time</th>
+    <th>Email</th>
+    <th>Valid ID</th>
+    <th>Status</th>
+    <th>Time In</th>
+    <th>Time Out</th>
+    <th>Created At</th>
+    <th>Action</th>
+</tr>
 
-                {% for visitor in visitors %}
-    <tr>
-    <td>{{ visitor[0] }}</td>  <!-- id -->
-    <td>{{ visitor[1] }}</td>  <!-- name -->
-    <td>{{ visitor[2] }}</td>  <!-- reason -->
-    <td>{{ visitor[3] }}</td>  <!-- department -->
-    <td>{{ visitor[4] }}</td>  <!-- person_to_visit -->
-    <td>{{ visitor[5] }}</td>  <!-- visit_date -->
-    <td>{{ visitor[6] }}</td>  <!-- visit_time -->
-    <td>{{ visitor[8] }}</td>  <!-- valid_id -->
+{% for visitor in visitors %}
+<tr>
+    <td>{{ visitor[0] }}</td>   <!-- id -->
+    <td>{{ visitor[1] }}</td>   <!-- name -->
+    <td>{{ visitor[2] }}</td>   <!-- reason -->
+    <td>{{ visitor[4] }}</td>   <!-- department -->
+    <td>{{ visitor[3] }}</td>   <!-- person_to_visit -->
+    <td>{{ visitor[5] }}</td>   <!-- visit_date -->
+    <td>{{ visitor[6] }}</td>   <!-- visit_time -->
+    <td>{{ visitor[7] }}</td>   <!-- email -->
 
     <td>
         {% if visitor[8] %}
@@ -191,14 +202,23 @@ tr:hover {
         {% endif %}
     </td>
 
-    <td>{{ visitor[7] }}</td>  <!-- email -->
-    <td>{{ visitor[9] }}</td>  <!-- time_in -->
-    <td>{{ visitor[10] }}</td> <!-- time_out -->
-    <td>{{ visitor[11] }}</td> <!-- created_at -->
-    </tr>
-            {% endfor %}
+    <td>{{ visitor[11] }}</td>  <!-- status -->
+    <td>{{ visitor[9] }}</td>   <!-- time_in -->
+    <td>{{ visitor[10] }}</td>  <!-- time_out -->
+    <td>{{ visitor[12] }}</td>  <!-- created_at -->
 
-            </table>
+    <td>
+        {% if visitor[11] == 'Pending' %}
+            <a href="{{ url_for('approve_visitor', visitor_id=visitor[0]) }}">Approve</a> |
+            <a href="{{ url_for('decline_visitor', visitor_id=visitor[0]) }}">Decline</a>
+        {% else %}
+            -
+        {% endif %}
+    </td>
+</tr>
+{% endfor %}
+</table>
+
         </div>
     </div>
 </body>
