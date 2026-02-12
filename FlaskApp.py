@@ -346,6 +346,46 @@ def generate_qr_form():
     qr_code = base64.b64encode(buffer.getvalue()).decode('utf-8')
     return render_template('qr_result.html', qr_code=qr_code, visitor_info=visitor_info, valid_id=filename)
 
+@app.route('/generate_qr/<int:visitor_id>')
+def generate_qr_by_id(visitor_id):
+    conn = sqlite3.connect('visitors.db')
+    cursor = conn.cursor()
+    cursor.execute("SELECT name, reason, person_to_visit, department, visit_date, visit_time, email, valid_id FROM visitors WHERE id=?", (visitor_id,))
+    visitor = cursor.fetchone()
+    conn.close()
+
+    if not visitor:
+        return "❌ Visitor not found", 404
+
+    visitor_info = {
+        'name': visitor[0],
+        'reason': visitor[1],
+        'person_to_visit': visitor[2],
+        'department': visitor[3],
+        'visit_date': visitor[4],
+        'visit_time': visitor[5],
+        'email': visitor[6]
+    }
+    filename = visitor[7]
+
+    qr_data = (
+        f"Name: {visitor_info['name']}\n"
+        f"Reason: {visitor_info['reason']}\n"
+        f"Person to Visit: {visitor_info['person_to_visit']}\n"
+        f"Department: {visitor_info['department']}\n"
+        f"Date: {visitor_info['visit_date']}\n"
+        f"Time: {visitor_info['visit_time']}\n"
+        f"Email: {visitor_info['email']}\n"
+        f"Valid ID: {filename if filename else 'None'}"
+    )
+
+    qr = qrcode.make(qr_data)
+    buffer = io.BytesIO()
+    qr.save(buffer)
+    qr_code = base64.b64encode(buffer.getvalue()).decode('utf-8')
+
+    return render_template('qr_result.html', qr_code=qr_code, visitor_info=visitor_info, valid_id=filename)
+
 
 # View uploaded file
 @app.route('/uploads/<filename>')
