@@ -582,6 +582,30 @@ def edit_homepage():
     conn.close()
     return render_template('edit_homepage.html', homepage=homepage_content)
 
+@app.route('/api/login', methods=['POST'])
+def api_login():
+    data = request.get_json()
+
+    username = data.get('username')
+    password = data.get('password')
+
+    conn = sqlite3.connect('admin.db')
+    cursor = conn.cursor()
+    cursor.execute("SELECT role FROM admin WHERE username=? AND password=?", (username, password))
+    user = cursor.fetchone()
+    conn.close()
+
+    if user:
+        return jsonify({
+            "success": True,
+            "role": user[0]
+        })
+    else:
+        return jsonify({
+            "success": False,
+            "message": "Invalid credentials"
+        }), 401
+
 
 # Run Flask
 if __name__ == "__main__":
