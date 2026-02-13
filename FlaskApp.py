@@ -1,5 +1,5 @@
 import csv
-from flask import Flask, render_template, request, redirect, session, send_from_directory, Response
+from flask import Flask, render_template, request, redirect, session, send_from_directory, Response, jsonify
 import os, random, sqlite3, qrcode, io, base64
 from werkzeug.utils import secure_filename
 from datetime import datetime, timedelta
