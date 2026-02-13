@@ -636,6 +636,89 @@ def api_admin_visitors():
 
     return jsonify(visitors)
 
+@app.route('/api/admin/approve/<int:visitor_id>', methods=['POST'])
+def api_admin_approve(visitor_id):
+    try:
+        conn = sqlite3.connect('visitors.db')
+        cursor = conn.cursor()
+
+        cursor.execute("UPDATE visitors SET status='Approved' WHERE id=?", (visitor_id,))
+        conn.commit()
+
+        cursor.execute("SELECT email FROM visitors WHERE id=?", (visitor_id,))
+        row = cursor.fetchone()
+        conn.close()
+
+        if not row:
+            return jsonify({"success": False, "message": "Visitor not found"}), 404
+
+        email = row[0]
+
+        # link that shows visitor QR code (you said this already works)
+        qr_link = f"https://emailandmobileapp.onrender.com/generate_qr/{visitor_id}"
+
+        message = Mail(
+            from_email=EMAIL_ADDRESS,
+            to_emails=email,
+            subject="Visit Approved - La Concepcion College",
+            html_content=f"""
+                <p>Your visit has been <b>approved</b>.</p>
+                <p>Please save your QR code here:</p>
+                <a href="{qr_link}">{qr_link}</a>
+            """
+        )
+
+        try:
+            sg = SendGridAPIClient(SENDGRID_API_KEY)
+            sg.send(message)
+        except Exception as e:
+            print("Approval email failed:", e)
+
+        return jsonify({"success": True, "message": "Approved and email sent"})
+
+    except Exception as e:
+        print("api_admin_approve error:", e)
+        return jsonify({"success": False, "message": "Server error"}), 500
+
+
+@app.route('/api/admin/decline/<int:visitor_id>', methods=['POST'])
+def api_admin_decline(visitor_id):
+    try:
+        conn = sqlite3.connect('visitors.db')
+        cursor = conn.cursor()
+
+        cursor.execute("UPDATE visitors SET status='Declined' WHERE id=?", (visitor_id,))
+        conn.commit()
+
+        cursor.execute("SELECT email FROM visitors WHERE id=?", (visitor_id,))
+        row = cursor.fetchone()
+        conn.close()
+
+        if not row:
+            return jsonify({"success": False, "message": "Visitor not found"}), 404
+
+        email = row[0]
+
+        message = Mail(
+            from_email=EMAIL_ADDRESS,
+            to_emails=email,
+            subject="Visit Declined - La Concepcion College",
+            html_content="<p>We are sorry, your visit request was <b>declined</b>.</p>"
+        )
+
+        try:
+            sg = SendGridAPIClient(SENDGRID_API_KEY)
+            sg.send(message)
+        except Exception as e:
+            print("Decline email failed:", e)
+
+        return jsonify({"success": True, "message": "Declined and email sent"})
+
+    except Exception as e:
+        print("api_admin_decline error:", e)
+        return jsonify({"success": False, "message": "Server error"}), 500
+
+
 
 # Run Flask
 if __name__ == "__main__":
