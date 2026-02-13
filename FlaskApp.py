@@ -762,6 +762,41 @@ def api_admin_decline(visitor_id):
         return jsonify({"success": False, "message": "Server error"}), 500
 
 
+@app.route('/api/dep/visitors', methods=['GET'])
+def api_dep_visitors():
+    department = request.args.get("department")
+    if not department:
+        return jsonify({"success": False, "message": "Missing department"}), 400
+
+    conn = sqlite3.connect('visitors.db')
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT id, name, reason, department, person_to_visit, visit_date, visit_time, email, status, created_at
+        FROM visitors
+        WHERE department = ?
+        ORDER BY id DESC
+    """, (department,))
+    rows = cursor.fetchall()
+    conn.close()
+
+    visitors = []
+    for r in rows:
+        visitors.append({
+            "id": r[0],
+            "name": r[1],
+            "reason": r[2],
+            "department": r[3],
+            "person_to_visit": r[4],
+            "visit_date": r[5],
+            "visit_time": r[6],
+            "email": r[7],
+            "status": r[8],
+            "created_at": r[9],
+        })
+
+    return jsonify(visitors)
+
 
 # Run Flask
 if __name__ == "__main__":
