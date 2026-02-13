@@ -44,22 +44,51 @@ def init_visitor_database():
 def init_admin_database():
     conn = sqlite3.connect('admin.db')
     cursor = conn.cursor()
+
+    # Create table (fresh installs)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS admin (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE NOT NULL,
             password TEXT NOT NULL,
-            role TEXT NOT NULL  -- admin, guard, dep_head
+            role TEXT NOT NULL,          -- admin, guard, dep_head
+            department TEXT              -- NULL for admin/guard, e.g. BSIS/CRIM/BSA for dep_head
         )
     ''')
-    # Default accounts
-    cursor.execute('INSERT OR IGNORE INTO admin (username, password, role) VALUES (?, ?, ?)', ('admin', '12345', 'admin'))
-    cursor.execute('INSERT OR IGNORE INTO admin (username, password, role) VALUES (?, ?, ?)', ('guard', '12345', 'guard'))
-    cursor.execute('INSERT OR IGNORE INTO admin (username, password, role) VALUES (?, ?, ?)', ('bsis_head', '12345', 'dep_head'))
-    cursor.execute('INSERT OR IGNORE INTO admin (username, password, role) VALUES (?, ?, ?)', ('crim_head', '12345', 'dep_head'))
-    cursor.execute('INSERT OR IGNORE INTO admin (username, password, role) VALUES (?, ?, ?)', ('bsa_head', '12345', 'dep_head'))
+
+    # ✅ Migration: add department column if this DB was created before
+    cursor.execute("PRAGMA table_info(admin)")
+    cols = [row[1] for row in cursor.fetchall()]
+    if "department" not in cols:
+        cursor.execute("ALTER TABLE admin ADD COLUMN department TEXT")
+
+    # Seed default accounts
+    cursor.execute(
+        'INSERT OR IGNORE INTO admin (username, password, role, department) VALUES (?, ?, ?, ?)',
+        ('admin', '12345', 'admin', None)
+    )
+    cursor.execute(
+        'INSERT OR IGNORE INTO admin (username, password, role, department) VALUES (?, ?, ?, ?)',
+        ('guard', '12345', 'guard', None)
+    )
+
+    # Department heads
+    cursor.execute(
+        'INSERT OR IGNORE INTO admin (username, password, role, department) VALUES (?, ?, ?, ?)',
+        ('bsis_head', '12345', 'dep_head', 'BSIS')
+    )
+    cursor.execute(
+        'INSERT OR IGNORE INTO admin (username, password, role, department) VALUES (?, ?, ?, ?)',
+        ('crim_head', '12345', 'dep_head', 'CRIM')
+    )
+    cursor.execute(
+        'INSERT OR IGNORE INTO admin (username, password, role, department) VALUES (?, ?, ?, ?)',
+        ('bsa_head', '12345', 'dep_head', 'BSA')
+    )
+
     conn.commit()
     conn.close()
+
 
 
 def init_homepage_database():
@@ -584,27 +613,41 @@ def edit_homepage():
 
 @app.route('/api/login', methods=['POST'])
 def api_login():
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
 
     username = data.get('username')
     password = data.get('password')
 
-    conn = sqlite3.connect('admin.db')
-    cursor = conn.cursor()
-    cursor.execute("SELECT role FROM admin WHERE username=? AND password=?", (username, password))
-    user = cursor.fetchone()
-    conn.close()
-
-    if user:
-        return jsonify({
-            "success": True,
-            "role": user[0]
-        })
-    else:
+    if not username or not password:
         return jsonify({
             "success": False,
-            "message": "Invalid credentials"
-        }), 401
+            "message": "Missing username or password"
+        }), 400
+
+    conn = sqlite3.connect('admin.db')
+    cursor = conn.cursor()
+
+    # role + department
+    cursor.execute(
+        "SELECT role, department FROM admin WHERE username=? AND password=?",
+        (username, password)
+    )
+    row = cursor.fetchone()
+    conn.close()
+
+    if row:
+        role, department = row[0], row[1]
+        return jsonify({
+            "success": True,
+            "role": role,
+            "department": department  # will be null for admin/guard
+        })
+
+    return jsonify({
+        "success": False,
+        "message": "Invalid credentials"
+    }), 401
+
 
 @app.route('/api/admin/visitors', methods=['GET'])
 def api_admin_visitors():
