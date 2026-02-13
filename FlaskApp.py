@@ -606,6 +606,36 @@ def api_login():
             "message": "Invalid credentials"
         }), 401
 
+@app.route('/api/admin/visitors', methods=['GET'])
+def api_admin_visitors():
+    conn = sqlite3.connect('visitors.db')
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT id, name, reason, department, person_to_visit, visit_date, visit_time, email, status, created_at
+        FROM visitors
+        ORDER BY id DESC
+    """)
+    rows = cursor.fetchall()
+    conn.close()
+
+    visitors = []
+    for r in rows:
+        visitors.append({
+            "id": r[0],
+            "name": r[1],
+            "reason": r[2],
+            "department": r[3],
+            "person_to_visit": r[4],
+            "visit_date": r[5],
+            "visit_time": r[6],
+            "email": r[7],
+            "status": r[8],
+            "created_at": r[9],
+        })
+
+    return jsonify(visitors)
+
 
 # Run Flask
 if __name__ == "__main__":
