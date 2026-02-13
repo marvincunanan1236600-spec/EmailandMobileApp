@@ -306,6 +306,8 @@ def verify_otp():
     entered_otp = request.form['otp']
     stored_otp = session.get('otp')
     otp_timestamp = session.get('otp_timestamp')
+    visitor_id = cursor.lastrowid
+    session["visitor_id"] = visitor_id
 
     # Check if OTP exists
     if not stored_otp:
@@ -359,7 +361,11 @@ def generate_qr_form():
     filename = session.get('valid_id_filename')
     if not visitor_info:
         return redirect('/')
+    visitor_id = session.get("visitor_id")
+    qr_link = f"https://emailandmobileapp.onrender.com/generate_qr/{visitor_id}" if visitor_id else "N/A"
     qr_data = (
+        f"VISITOR_ID:{visitor_id if visitor_id else 'N/A'}\n"
+        f"QR_LINK:{qr_link}\n"
         f"Name: {visitor_info['name']}\n"
         f"Reason: {visitor_info['reason']}\n"
         f"Person to Visit: {visitor_info['person_to_visit']}\n"
@@ -397,7 +403,11 @@ def generate_qr_by_id(visitor_id):
     }
     filename = visitor[7]
 
+    qr_link = f"https://emailandmobileapp.onrender.com/generate_qr/{visitor_id}"
+
     qr_data = (
+        f"VISITOR_ID:{visitor_id}\n"
+        f"QR_LINK:{qr_link}\n"
         f"Name: {visitor_info['name']}\n"
         f"Reason: {visitor_info['reason']}\n"
         f"Person to Visit: {visitor_info['person_to_visit']}\n"
