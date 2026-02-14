@@ -908,6 +908,42 @@ def api_guard_scan(visitor_id):
         "message": "Visitor already timed out (visit completed)."
     }), 409
 
+@app.route('/api/guard/today', methods=['GET'])
+def api_guard_today():
+    conn = sqlite3.connect('visitors.db')
+    cursor = conn.cursor()
+
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    cursor.execute("""
+        SELECT id, name, department, person_to_visit,
+               visit_time, status, time_in, time_out
+        FROM visitors
+        WHERE visit_date=? AND status='Approved'
+        ORDER BY visit_time ASC
+    """, (today,))
+
+    rows = cursor.fetchall()
+    conn.close()
+
+    visitors = []
+    for row in rows:
+        visitors.append({
+            "id": row[0],
+            "name": row[1],
+            "department": row[2],
+            "person_to_visit": row[3],
+            "visit_time": row[4],
+            "status": row[5],
+            "time_in": row[6],
+            "time_out": row[7]
+        })
+
+    return jsonify({
+        "success": True,
+        "visitors": visitors
+    })
+
 
 # Run Flask
 if __name__ == "__main__":
