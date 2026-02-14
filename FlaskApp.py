@@ -807,6 +807,47 @@ def api_dep_visitors():
 
     return jsonify(visitors)
 
+# ---------------- GUARD API ----------------
+
+@app.route('/api/guard/visitor/<int:visitor_id>', methods=['GET'])
+def api_guard_get_visitor(visitor_id):
+    conn = sqlite3.connect('visitors.db')
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT id, name, reason, person_to_visit, department,
+               visit_date, visit_time, email, valid_id,
+               time_in, time_out, status, created_at
+        FROM visitors
+        WHERE id=?
+    """, (visitor_id,))
+
+    row = cursor.fetchone()
+    conn.close()
+
+    if not row:
+        return jsonify({"success": False, "message": "Visitor not found"}), 404
+
+    return jsonify({
+        "success": True,
+        "visitor": {
+            "id": row[0],
+            "name": row[1],
+            "reason": row[2],
+            "person_to_visit": row[3],
+            "department": row[4],
+            "visit_date": row[5],
+            "visit_time": row[6],
+            "email": row[7],
+            "valid_id": row[8],
+            "time_in": row[9],
+            "time_out": row[10],
+            "status": row[11],
+            "created_at": row[12],
+        }
+    })
+
+
 
 # Run Flask
 if __name__ == "__main__":
