@@ -846,7 +846,67 @@ def api_guard_get_visitor(visitor_id):
             "created_at": row[12],
         }
     })
+@app.route('/api/guard/scan/<int:visitor_id>', methods=['POST'])
+def api_guard_scan(visitor_id):
+    conn = sqlite3.connect('visitors.db')
+    cursor = conn.cursor()
 
+    cursor.execute("""
+        SELECT id, name, department, person_to_visit,
+               visit_date, visit_time, status, time_in, time_out
+        FROM visitors WHERE id=?
+    """, (visitor_id,))
+    row = cursor.fetchone()
+
+    if not row:
+        conn.close()
+        return jsonify({"success": False, "message": "Visitor not found"}), 404
+
+    (vid, name, dept, person, vdate, vtime, status, time_in, time_out) = row
+
+    # ✅ Status must be Approved
+    if status != "Approved":
+        conn.close()
+        return jsonify({"success": False, "message": f"Not allowed: status is {status}"}), 403
+
+    # ✅ Expiration check: compare visit_date to today
+    today = datetime.now().strftime("%Y-%m-%d")
+    if vdate != today:
+        conn.close()
+        return jsonify({"success": False, "message": f"Not allowed: appointment date is {vdate}"}), 403
+
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    # If no time_in yet → auto TIME IN
+    if not time_in:
+        cursor.execute("UPDATE visitors SET time_in=? WHERE id=?", (now_str, vid))
+        conn.commit()
+        conn.close()
+        return jsonify({
+            "success": True,
+            "action": "TIME_IN",
+            "message": f"Time-in recorded for {name}",
+            "time": now_str
+        })
+
+    # If time_in exists but no time_out yet → auto TIME OUT
+    if time_in and not time_out:
+        cursor.execute("UPDATE visitors SET time_out=? WHERE id=?", (now_str, vid))
+        conn.commit()
+        conn.close()
+        return jsonify({
+            "success": True,
+            "action": "TIME_OUT",
+            "message": f"Time-out recorded for {name}",
+            "time": now_str
+        })
+
+    # If both exist → already completed
+    conn.close()
+    return jsonify({
+        "success": False,
+        "message": "Visitor already timed out (visit completed)."
+    }), 409
 
 
 # Run Flask
