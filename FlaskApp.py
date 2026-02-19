@@ -5,6 +5,7 @@ from werkzeug.utils import secure_filename
 from datetime import datetime, timedelta
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
+from zoneinfo import ZoneInfo
 
 app = Flask(__name__)
 app.secret_key = 'supersecretkey'
@@ -920,40 +921,46 @@ def api_guard_scan(visitor_id):
         "message": "Visitor already timed out (visit completed)."
     }), 409
 
-@app.route('/api/guard/today', methods=['GET'])
+@app.route("/api/guard/today", methods=["GET"])
 def api_guard_today():
-    conn = sqlite3.connect('visitors.db')
+    today_ph = datetime.now(ZoneInfo("Asia/Manila")).date().isoformat()  # "YYYY-MM-DD"
+
+    conn = sqlite3.connect("visitors.db")
     cursor = conn.cursor()
 
-    today = datetime.now().strftime("%Y-%m-%d")
-
     cursor.execute("""
-        SELECT id, name, department, person_to_visit,
-               visit_time, status, time_in, time_out
+        SELECT id, name, reason, department, person_to_visit, visit_date, visit_time,
+               email, status, time_in, time_out
         FROM visitors
-        WHERE visit_date=? AND status='Approved'
+        WHERE status = 'Approved'
+          AND visit_date = ?
         ORDER BY visit_time ASC
-    """, (today,))
+    """, (today_ph,))
 
     rows = cursor.fetchall()
     conn.close()
 
     visitors = []
-    for row in rows:
+    for r in rows:
         visitors.append({
-            "id": row[0],
-            "name": row[1],
-            "department": row[2],
-            "person_to_visit": row[3],
-            "visit_time": row[4],
-            "status": row[5],
-            "time_in": row[6],
-            "time_out": row[7]
+            "id": r[0],
+            "name": r[1],
+            "reason": r[2],
+            "department": r[3],
+            "person_to_visit": r[4],
+            "visit_date": r[5],
+            "visit_time": r[6],
+            "email": r[7],
+            "status": r[8],
+            "time_in": r[9],
+            "time_out": r[10]
         })
 
     return jsonify({
         "success": True,
-        "visitors": visitors
+        "visitors": visitors,
+        "server_today_ph": today_ph,   # helpful debug
+        "count": len(visitors)
     })
 
 
