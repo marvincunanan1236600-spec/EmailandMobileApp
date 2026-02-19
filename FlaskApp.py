@@ -306,8 +306,6 @@ def verify_otp():
     entered_otp = request.form['otp']
     stored_otp = session.get('otp')
     otp_timestamp = session.get('otp_timestamp')
-    visitor_id = cursor.lastrowid
-    session["visitor_id"] = visitor_id
 
     # Check if OTP exists
     if not stored_otp:
@@ -316,40 +314,54 @@ def verify_otp():
     # Check if OTP is expired (10 minutes)
     if otp_timestamp:
         elapsed_time = datetime.now().timestamp() - otp_timestamp
-        if elapsed_time > 600:  # 10 minutes
+        if elapsed_time > 600:
             return render_template('Error.html', message="❌ OTP has expired. Please request a new code.")
 
     if entered_otp == stored_otp:
+
         visitor_info = session.get('visitor_info')
         filename = session.get('valid_id_filename')
+
         conn = sqlite3.connect('visitors.db')
         cursor = conn.cursor()
+
+        # Mark email verified (optional but fine)
         cursor.execute("UPDATE visitors SET is_verified=1 WHERE email=?", (visitor_info['email'],))
+
+        # Insert visitor
         cursor.execute('''
-            INSERT INTO visitors (name, reason, person_to_visit, department, visit_date, visit_time, email, valid_id, created_at, is_verified)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO visitors 
+            (name, reason, person_to_visit, department, visit_date, visit_time, email, valid_id, created_at, is_verified, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             visitor_info['name'],
             visitor_info['reason'],
             visitor_info['person_to_visit'],
-            visitor_info['department'],  # ← ADD THIS
+            visitor_info['department'],
             visitor_info['visit_date'],
             visitor_info['visit_time'],
             visitor_info['email'],
             filename,
             datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            1
+            1,
+            'Pending'
         ))
+
+        # ✅ NOW cursor exists and INSERT is done
+        visitor_id = cursor.lastrowid
+        session["visitor_id"] = visitor_id
 
         conn.commit()
         conn.close()
+
         session['verified_email'] = visitor_info['email']
 
-        # Clear OTP from session
+        # Clear OTP
         session.pop('otp', None)
         session.pop('otp_timestamp', None)
 
         return render_template('pending_approval.html')
+
     else:
         return render_template('Error.html', message="❌ Invalid OTP. Please try again or request a new code.")
 
