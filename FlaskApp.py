@@ -882,13 +882,13 @@ def api_guard_scan(visitor_id):
         conn.close()
         return jsonify({"success": False, "message": f"Not allowed: status is {status}"}), 403
 
-    # ✅ Expiration check: compare visit_date to today
-    today = datetime.now().strftime("%Y-%m-%d")
+    # ✅ Expiration check: compare visit_date to today (Manila)
+    today = datetime.now(ZoneInfo("Asia/Manila")).strftime("%Y-%m-%d")
     if vdate != today:
         conn.close()
         return jsonify({"success": False, "message": f"Not allowed: appointment date is {vdate}"}), 403
 
-    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    now_str = datetime.now(ZoneInfo("Asia/Manila")).strftime("%Y-%m-%d %H:%M:%S")
 
     # If no time_in yet → auto TIME IN
     if not time_in:
