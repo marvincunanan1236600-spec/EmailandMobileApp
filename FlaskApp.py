@@ -230,6 +230,35 @@ def send_verification():
     visit_date = request.form['visit_date']
     visit_time = request.form['visit_time']
 
+    # ✅ Enforce date + time rules (Asia/Manila)
+    today_ph = datetime.now(ZoneInfo("Asia/Manila")).date()
+    selected_date = datetime.strptime(visit_date, "%Y-%m-%d").date()
+
+    # Date must be tomorrow onwards
+    if selected_date <= today_ph:
+        return render_template(
+            "Error.html",
+            message="⚠️ Same-day appointments are not allowed. Please choose tomorrow or later."
+        )
+
+    # Time must be 09:00–16:00
+    try:
+        selected_time = datetime.strptime(visit_time, "%H:%M").time()
+    except ValueError:
+        return render_template("Error.html", message="⚠️ Invalid time format.")
+
+    start_time = datetime.strptime("09:00", "%H:%M").time()
+    end_time = datetime.strptime("16:00", "%H:%M").time()
+
+    # Decide whether 4:00 PM is allowed:
+    # - If you want 4:00 PM allowed, keep `>` as below.
+    # - If you want only up to 3:59 PM, change to `>=`.
+    if selected_time < start_time or selected_time > end_time:
+        return render_template(
+            "Error.html",
+            message="⚠️ Visiting hours are only from 9:00 AM to 4:00 PM. Please select a valid time."
+        )
+
     conn = sqlite3.connect('visitors.db')
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM visitors WHERE name=? AND visit_date=? AND visit_time=?",

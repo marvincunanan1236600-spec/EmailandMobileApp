@@ -150,12 +150,12 @@
 
                 <div class="form-group">
                     <label>Date of Visit <span class="required">*</span></label>
-                    <input type="date" name="visit_date" required>
+                    <input type="date" name="visit_date" id="visit_date" required>
                 </div>
 
                 <div class="form-group">
                     <label>Time of Visit <span class="required">*</span></label>
-                    <input type="time" name="visit_time" required>
+                    <input type="time" name="visit_time" id="visit_time" required min="09:00" max="16:00">
                 </div>
 
                 <div class="form-group">
@@ -174,9 +174,34 @@
     </div>
 
 <script>
-function goBack() {
-    window.history.back();
-}
+    // ✅ Date min = TOMORROW
+    const dateInput = document.getElementById("visit_date");
+    const timeInput = document.getElementById("visit_time");
+
+    const d = new Date();
+    d.setDate(d.getDate() + 1); // tomorrow
+
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+
+    dateInput.min = `${yyyy}-${mm}-${dd}`;
+
+    // ✅ Time range
+    timeInput.min = "09:00";
+    timeInput.max = "16:00";
+
+    // ✅ Extra safety: if user types a time outside range, auto-correct to min/max
+    timeInput.addEventListener("change", () => {
+        if (!timeInput.value) return;
+
+        if (timeInput.value < "09:00") timeInput.value = "09:00";
+        if (timeInput.value > "16:00") timeInput.value = "16:00";
+    });
+
+    function goBack() {
+        window.history.back();
+    }
 </script>
 </body>
 </html>
