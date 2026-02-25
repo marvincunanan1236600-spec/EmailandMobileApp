@@ -1002,7 +1002,103 @@ def api_admin_decline(visitor_id):
         print("api_admin_decline error:", e)
         return jsonify({"success": False, "message": "Server error"}), 500
 
+# ---------------- ADMIN ACCOUNTS API ----------------
 
+@app.route("/api/admin/accounts", methods=["GET"])
+def api_admin_accounts_list():
+    conn = sqlite3.connect("admin.db")
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT id, username, role, department
+        FROM admin
+        ORDER BY id ASC
+    """)
+    rows = cursor.fetchall()
+    conn.close()
+
+    accounts = []
+    for r in rows:
+        accounts.append({
+            "id": r[0],
+            "username": r[1],
+            "role": r[2],
+            "department": r[3]
+        })
+
+    return jsonify({"success": True, "accounts": accounts})
+
+
+@app.route("/api/admin/accounts", methods=["POST"])
+def api_admin_accounts_create():
+    data = request.get_json(silent=True) or {}
+    username = (data.get("username") or "").strip()
+    password = (data.get("password") or "").strip()
+    role = (data.get("role") or "").strip()
+    department = (data.get("department") or "").strip()
+
+    if not username or not password or not role:
+        return jsonify({"success": False, "message": "Missing username/password/role"}), 400
+
+    allowed_roles = {"admin", "guard", "dep_head"}
+    if role not in allowed_roles:
+        return jsonify({"success": False, "message": "Invalid role"}), 400
+
+    # dep_head requires department
+    if role == "dep_head" and not department:
+        return jsonify({"success": False, "message": "Department is required for dep_head"}), 400
+
+    # admin/guard should have NULL department
+    if role in ("admin", "guard"):
+        department = None
+
+    try:
+        conn = sqlite3.connect("admin.db")
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO admin (username, password, role, department) VALUES (?, ?, ?, ?)",
+            (username, password, role, department)
+        )
+        conn.commit()
+        new_id = cursor.lastrowid
+        conn.close()
+
+        return jsonify({"success": True, "message": "Account created", "id": new_id})
+
+    except sqlite3.IntegrityError:
+        return jsonify({"success": False, "message": "Username already exists"}), 409
+    except Exception as e:
+        print("api_admin_accounts_create error:", e)
+        return jsonify({"success": False, "message": "Server error"}), 500
+
+
+@app.route("/api/admin/accounts/<int:account_id>", methods=["DELETE"])
+def api_admin_accounts_delete(account_id):
+    # protect default system accounts (optional but recommended)
+    protected_usernames = {"admin", "guard", "bsis_head", "crim_head", "bsa_head"}
+
+    conn = sqlite3.connect("admin.db")
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT username FROM admin WHERE id=?", (account_id,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return jsonify({"success": False, "message": "Account not found"}), 404
+
+    username = row[0]
+    if username in protected_usernames:
+        conn.close()
+        return jsonify({"success": False, "message": "This account is protected"}), 403
+
+    cursor.execute("DELETE FROM admin WHERE id=?", (account_id,))
+    conn.commit()
+    conn.close()
+
+    return jsonify({"success": True, "message": "Account deleted"})
+
+
+#------------------Dept api----------------
 @app.route('/api/dep/visitors', methods=['GET'])
 def api_dep_visitors():
     department = request.args.get("department")
