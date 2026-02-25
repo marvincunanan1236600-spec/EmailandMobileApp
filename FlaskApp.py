@@ -268,6 +268,10 @@ def terms():
         terms_body=content.get('terms_body', '')
     )
 
+@app.route('/accept_terms', methods=['POST'])
+def accept_terms():
+    session['accepted_terms'] = True
+    return redirect('/appointment')
 
 # Send OTP for verification
 @app.route('/send_verification', methods=['POST'])
