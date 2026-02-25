@@ -112,9 +112,18 @@ def init_homepage_database():
         ('contact_phone', '(044) 762-36-60'),
         ('contact_phone_extra', '09276769921 – General Information'),
         ('contact_email', 'registrar@laconcepcioncollege.com'),
-        ('contact_address', 'Kaypian Road, corner Quirino St, San Jose del Monte City, Bulacan, 3023')
+        ('contact_address', 'Kaypian Road, corner Quirino St, San Jose del Monte City, Bulacan, 3023'),  # ✅ comma here
+
+        # ✅ NEW: editable Terms & Conditions
         ('terms_title', 'Terms and Conditions'),
-        ('terms_body', 'Put your terms here...'),
+        ('terms_body',
+         "Welcome to La Concepcion College's Online Appointment System.\n\n"
+         "• All visitors are required to provide complete and accurate information.\n"
+         "• Appointments must be scheduled at least 24 hours before the intended visit.\n"
+         "• You will receive a QR code that must be presented upon arrival.\n"
+         "• Visits are subject to approval by LCC Administration.\n"
+         "• Visitors must follow school safety and security protocols.\n"
+         ),
     ]
     for section, content in default_content:
         cursor.execute("INSERT OR IGNORE INTO homepage_content (section, content) VALUES (?, ?)", (section, content))
