@@ -102,8 +102,8 @@ def init_homepage_database():
         )
     ''')
     default_content = [
-        ('about_paragraph1', 'La Concepcion College, Inc. (LCC) is founded in 1998...'),
-        ('about_paragraph2', 'The LCC Online Appointment System was developed to make scheduling visits easier...'),
+        ('about_paragraph1', 'La Concepcion College, Inc. (LCC) is founded in 1998, a non-sectarian higher education institution with a young nucleus of rich academic, cultural, and athletic achievements offering academic programs from Pre-Kindergarten, Elementary, Junior High School, Senior High School, Vocational, to College Courses, the school is strategically situated in the heart of the fast-growing City of San Jose del Monte, Bulacan, Philippines.'),
+        ('about_paragraph2', 'The LCC Online Appointment System was developed to make scheduling visits and inquiries more convenient for students, parents, and visitors. Through this system, you can easily set appointments for admissions, consultations, and other school-related transactions—ensuring an organized and efficient experience for everyone.'),
         ('how_intro', 'To ensure a smooth and organized visit, all visitors must schedule online.'),
         ('how_step1', 'Complete the required details on the appointment form.'),
         ('how_step2', 'After submitting, a unique QR code will be generated.'),
@@ -118,11 +118,45 @@ def init_homepage_database():
         ('terms_title', 'Terms and Conditions'),
         ('terms_body',
          "Welcome to La Concepcion College's Online Appointment System.\n\n"
-         "• All visitors are required to provide complete and accurate information.\n"
-         "• Appointments must be scheduled at least 24 hours before the intended visit.\n"
-         "• You will receive a QR code that must be presented upon arrival.\n"
-         "• Visits are subject to approval by LCC Administration.\n" 
-         "• Visitors must follow school safety and security protocols.\n"
+         "• Purpose of the System. The GATE-PASS system is designed to streamline visitor entry, enhance campus security, and provide an efficient appointment and tracking process within La Concepcion College. The system collects data to authenticate identity, record visit logs, and support administrative operations.\n"
+         "• Collection of Personal Information. To use the system, users may be required to provide personal information such as\n"
+         " -Full Name\n"
+         " -Email Address\n" 
+         " -Valid ID\n"
+         "• All information collected is necessary for proper identity verification and security monitoring.\n"
+         "• Legal Basis for Processing (RA 10173). All personal data shall be processed in accordance with the Data Privacy Act of 2012 (RA 10173) and its Implementing Rules and Regulations. Processing is based on:\n"
+         " -User Consent\n"
+         " -Legitimate interest of the institution\n"
+         " -Compliance with regulatory and security requirements\n"
+         "• Use of Collected Data. The collected data will be used exclusively for:\n"
+         " -Visitor verification and campus entry approval\n"
+         " -Appointment scheduling and confirmation\n"
+         " -Real-time and historical visitor tracking\n"
+         " -Security monitoring and record-keeping\n"
+         " -Institutional reporting and audit purposes\n"
+         "• No data will be used for purposes beyond those stated without your explicit consent.\n"
+         "• Data Sharing and Disclosure. Your personal information will not be sold or shared with third parties. Data may only be disclosed:\n"
+         " -When required by law or government authorities\n"
+         " -When necessary for safety, security, or institutional operations\n"
+         " -When authorized by the data subject\n"
+         "• Data Storage, Retention, and Security Measures. All personal data is stored securely within the institution’s authorized servers and protected through:\n"
+         " -Encryption\n"
+         " -Access controls\n"
+         " -Secure data transmission\n"
+         " -Regular system audits\n"
+         "• Rights of Data Subjects. Under RA 10173, all users have the right to:\n"
+         " -Request corrections or updates\n"
+         " -Withdraw consent at any time\n"
+         " -Object to the processing of their data\n"
+         " -Request deletion of data, subject to legal and institutional limits\n"
+         " -File a complaint with the National Privacy Commission (NPC)\n"
+         "• User Responsibilities. By using the GATE-PASS system, users agree to:\n"
+         " -Provide accurate and truthful information\n"
+         " -Keep QR codes and login credentials confidential\n"
+         " -Use the system only for lawful and intended purposes\n"
+         "• Consent\n"
+         "• By accessing and using the GATE-PASS system, you voluntarily consent to the collection, processing, and storage of your personal information as described in this Terms and Conditions.\n"
+
          ),
     ]
     for section, content in default_content:
