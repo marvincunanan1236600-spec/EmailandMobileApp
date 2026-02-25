@@ -121,7 +121,7 @@ def init_homepage_database():
          "• All visitors are required to provide complete and accurate information.\n"
          "• Appointments must be scheduled at least 24 hours before the intended visit.\n"
          "• You will receive a QR code that must be presented upon arrival.\n"
-         "• Visits are subject to approval by LCC Administration.\n"
+         "• Visits are subject to approval by LCC Administration.\n" 
          "• Visitors must follow school safety and security protocols.\n"
          ),
     ]
