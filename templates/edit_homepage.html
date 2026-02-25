@@ -16,17 +16,25 @@
         .container {
             max-width: 900px;
             margin: 50px auto;
-            background: rgba(255, 255, 255, 0.85); /* slightly transparent */
+            background: rgba(255, 255, 255, 0.85);
             padding: 30px;
             border-radius: 10px;
             box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-            backdrop-filter: blur(5px); /* optional: soft blur behind the container */
+            backdrop-filter: blur(5px);
         }
 
         h1 {
             text-align: center;
             color: #333;
             margin-bottom: 30px;
+        }
+
+        h2 {
+            margin-top: 35px;
+            margin-bottom: 15px;
+            color: #333;
+            border-top: 1px solid #ddd;
+            padding-top: 20px;
         }
 
         form label {
@@ -36,6 +44,21 @@
             color: #555;
         }
 
+        form input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 14px;
+            margin-bottom: 15px;
+        }
+
+        form input[type="text"]:focus {
+            border-color: #007bff;
+            outline: none;
+            box-shadow: 0 0 5px rgba(0,123,255,0.3);
+        }
+
         form textarea {
             width: 100%;
             padding: 10px;
@@ -43,12 +66,20 @@
             border-radius: 5px;
             font-size: 14px;
             resize: vertical;
+            margin-bottom: 15px;
         }
 
         form textarea:focus {
             border-color: #007bff;
             outline: none;
             box-shadow: 0 0 5px rgba(0,123,255,0.3);
+        }
+
+        .hint {
+            font-size: 13px;
+            color: #666;
+            margin-top: -10px;
+            margin-bottom: 15px;
         }
 
         button {
@@ -88,11 +119,32 @@
 <body>
     <div class="container">
         <h1>Edit Homepage Content</h1>
+
         <form method="POST">
+            <!-- ✅ Existing homepage fields -->
             {% for section, content in homepage.items() %}
-                <label>{{ section.replace('_',' ').title() }}</label>
-                <textarea name="{{ section }}" rows="4">{{ content }}</textarea>
+                {% if section not in ['terms_title', 'terms_body'] %}
+                    <label>{{ section.replace('_',' ').title() }}</label>
+                    <textarea name="{{ section }}" rows="4">{{ content }}</textarea>
+                {% endif %}
             {% endfor %}
+
+            <!-- ✅ Terms & Conditions (editable too) -->
+            <h2>Terms & Conditions</h2>
+
+            <label>Terms Title</label>
+            <input
+                type="text"
+                name="terms_title"
+                value="{{ homepage.get('terms_title','Terms & Conditions') }}"
+            >
+
+            <label>Terms Body</label>
+            <textarea name="terms_body" rows="14">{{ homepage.get('terms_body','') }}</textarea>
+            <div class="hint">
+                Tip: You can use plain text. Use new lines to separate paragraphs.
+            </div>
+
             <button type="submit">Save Changes</button>
         </form>
     </div>

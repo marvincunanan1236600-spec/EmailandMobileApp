@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Terms & Conditions</title>
+    <title>{{ terms_title or "Terms & Conditions" }}</title>
 
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -103,22 +103,13 @@
 <body>
 
 <div class="container">
-    <h1>Terms & Conditions</h1>
+    <h1>{{ terms_title or "Terms & Conditions" }}</h1>
 
     <div class="content-box" id="termsBox">
-        <p>Welcome to La Concepcion College's Online Appointment System. Before proceeding, please review the following Terms & Conditions:</p>
-
-        <ul>
-            <li>All visitors are required to provide **complete and accurate information**.</li>
-            <li>Appointments must be scheduled **at least 24 hours before** the intended visit.</li>
-            <li>You will receive a QR code via email — this must be presented upon arrival at the school gate.</li>
-            <li>All visits are subject to approval by the LCC Administration Office.</li>
-            <li>Falsifying information may result in email blacklisting and denied entry.</li>
-            <li>The administration reserves the right to cancel appointments at any time.</li>
-            <li>Visitors must comply with school safety and security protocols at all times.</li>
-        </ul>
-
-        <p>By agreeing to these Terms, you confirm that you understand the policies and requirements set by La Concepcion College.</p>
+        <!-- ✅ Editable Terms Body -->
+        <div style="white-space: pre-line;">
+            {{ terms_body or "" }}
+        </div>
     </div>
 
     <p class="notice">Scroll to the bottom to enable the agreement checkbox.</p>

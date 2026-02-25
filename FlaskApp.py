@@ -113,6 +113,8 @@ def init_homepage_database():
         ('contact_phone_extra', '09276769921 – General Information'),
         ('contact_email', 'registrar@laconcepcioncollege.com'),
         ('contact_address', 'Kaypian Road, corner Quirino St, San Jose del Monte City, Bulacan, 3023')
+        ('terms_title', 'Terms and Conditions'),
+        ('terms_body', 'Put your terms here...'),
     ]
     for section, content in default_content:
         cursor.execute("INSERT OR IGNORE INTO homepage_content (section, content) VALUES (?, ?)", (section, content))
@@ -244,13 +246,18 @@ def appointment():
 
 @app.route('/terms')
 def terms():
-    return render_template('terms.html')
+    conn = sqlite3.connect('visitors.db')
+    cursor = conn.cursor()
+    cursor.execute("SELECT section, content FROM homepage_content")
+    rows = cursor.fetchall()
+    content = {row[0]: row[1] for row in rows}
+    conn.close()
 
-
-@app.route('/accept_terms', methods=['POST'])
-def accept_terms():
-    session['accepted_terms'] = True
-    return redirect('/appointment')
+    return render_template(
+        'terms.html',
+        terms_title=content.get('terms_title', 'Terms and Conditions'),
+        terms_body=content.get('terms_body', '')
+    )
 
 
 # Send OTP for verification
