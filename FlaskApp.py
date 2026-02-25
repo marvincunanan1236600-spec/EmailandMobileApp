@@ -10,8 +10,6 @@ from zoneinfo import ZoneInfo
 app = Flask(__name__)
 app.secret_key = 'supersecretkey'
 
-TEST_MODE = True
-
 # ---------------- CONFIG ----------------
 UPLOAD_FOLDER = os.path.join('static', 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -559,7 +557,7 @@ def admin_dashboard():
         'admin_dashboard.html',
         visitors=visitors,
         filter_type=filter_type,
-        test_mode=TEST_MODE
+        test_mode=is_test_mode()
     )
 
 @app.route('/admin/approve/<int:visitor_id>')
@@ -700,12 +698,27 @@ def edit_homepage():
 
 @app.route('/admin/toggle_test_mode')
 def toggle_test_mode():
-    global TEST_MODE
-
     if 'admin' not in session:
         return redirect('/admin/login')
 
-    TEST_MODE = not TEST_MODE
+    conn = sqlite3.connect('visitors.db')
+    cursor = conn.cursor()
+
+    # read current
+    cursor.execute("SELECT value FROM settings WHERE key='TEST_MODE'")
+    row = cursor.fetchone()
+    current = (row and row[0] == "1")
+
+    # flip
+    new_value = "0" if current else "1"
+    cursor.execute(
+        "UPDATE settings SET value=? WHERE key='TEST_MODE'",
+        (new_value,)
+    )
+
+    conn.commit()
+    conn.close()
+
     return redirect('/admin/dashboard')
 
 @app.route('/api/login', methods=['POST'])
