@@ -239,7 +239,7 @@ def index():
 def appointment():
     if not session.get('accepted_terms'):
         return redirect('/terms')
-    return render_template('qr_form.html')
+    return render_template('qr_form.html', test_mode=is_test_mode())
 
 
 @app.route('/terms')

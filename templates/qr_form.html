@@ -155,7 +155,7 @@
 
                 <div class="form-group">
                     <label>Time of Visit <span class="required">*</span></label>
-                    <input type="time" name="visit_time" id="visit_time" required min="09:00" max="16:00">
+                    <input type="time" name="visit_time" id="visit_time" required>
                 </div>
 
                 <div class="form-group">
@@ -174,34 +174,52 @@
     </div>
 
 <script>
-    // ✅ Date min = TOMORROW
-    const dateInput = document.getElementById("visit_date");
-    const timeInput = document.getElementById("visit_time");
+  // ✅ Flask will pass test_mode=True/False into the template
+  const TEST_MODE = {{ 'true' if test_mode else 'false' }};
 
-    const d = new Date();
-    d.setDate(d.getDate() + 1); // tomorrow
+  const dateInput = document.getElementById("visit_date");
+  const timeInput = document.getElementById("visit_time");
 
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const dd = String(d.getDate()).padStart(2, '0');
+  // Build YYYY-MM-DD for today
+  const today = new Date();
+  const yyyy = today.getFullYear();
+  const mm = String(today.getMonth() + 1).padStart(2, "0");
+  const dd = String(today.getDate()).padStart(2, "0");
+  const todayStr = `${yyyy}-${mm}-${dd}`;
 
-    dateInput.min = `${yyyy}-${mm}-${dd}`;
+  // ✅ Date rule:
+  // - TEST MODE ON  -> allow today
+  // - TEST MODE OFF -> tomorrow onwards
+  if (TEST_MODE) {
+    dateInput.min = todayStr;
+  } else {
+    const tmr = new Date(today);
+    tmr.setDate(tmr.getDate() + 1);
+    const y = tmr.getFullYear();
+    const m = String(tmr.getMonth() + 1).padStart(2, "0");
+    const d = String(tmr.getDate()).padStart(2, "0");
+    dateInput.min = `${y}-${m}-${d}`;
+  }
 
-    // ✅ Time range
+  // ✅ Time rule:
+  // You said you want time restriction only in HTML for now.
+  // So we remove restriction in TEST MODE for easier testing.
+  if (TEST_MODE) {
+    timeInput.removeAttribute("min");
+    timeInput.removeAttribute("max");
+  } else {
     timeInput.min = "09:00";
     timeInput.max = "16:00";
+  }
 
-    // ✅ Extra safety: if user types a time outside range, auto-correct to min/max
-    timeInput.addEventListener("change", () => {
-        if (!timeInput.value) return;
+  // ✅ Extra safety (only when NOT in test mode)
+  timeInput.addEventListener("change", () => {
+    if (TEST_MODE) return;
+    if (!timeInput.value) return;
 
-        if (timeInput.value < "09:00") timeInput.value = "09:00";
-        if (timeInput.value > "16:00") timeInput.value = "16:00";
-    });
-
-    function goBack() {
-        window.history.back();
-    }
+    if (timeInput.value < "09:00") timeInput.value = "09:00";
+    if (timeInput.value > "16:00") timeInput.value = "16:00";
+  });
 </script>
 </body>
 </html>
