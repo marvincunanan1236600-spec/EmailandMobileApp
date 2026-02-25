@@ -42,6 +42,28 @@ def init_visitor_database():
     conn.close()
 
 
+def migrate_visitors_add_decision_fields():
+    conn = sqlite3.connect('visitors.db')
+    cursor = conn.cursor()
+
+    # Check existing columns
+    cursor.execute("PRAGMA table_info(visitors)")
+    cols = [row[1] for row in cursor.fetchall()]
+
+    # Add missing columns safely
+    if "decision_note" not in cols:
+        cursor.execute("ALTER TABLE visitors ADD COLUMN decision_note TEXT")
+
+    if "decided_by" not in cols:
+        cursor.execute("ALTER TABLE visitors ADD COLUMN decided_by TEXT")
+
+    if "decided_at" not in cols:
+        cursor.execute("ALTER TABLE visitors ADD COLUMN decided_at TEXT")
+
+    conn.commit()
+    conn.close()
+
+
 def init_admin_database():
     conn = sqlite3.connect('admin.db')
     cursor = conn.cursor()
@@ -189,6 +211,7 @@ init_visitor_database()
 init_admin_database()
 init_homepage_database()
 init_settings_database()
+migrate_visitors_add_decision_fields()
 
 
 # ---------------- EMAIL SETTINGS ----------------
@@ -819,7 +842,7 @@ def api_admin_visitors():
     cursor = conn.cursor()
 
     cursor.execute("""
-        SELECT id, name, reason, department, person_to_visit, visit_date, visit_time, email, status, created_at
+        SELECT id, name, reason, department, person_to_visit, visit_date, visit_time, email, status, created_at, decision_note, decided_by, decided_at
         FROM visitors
         ORDER BY id DESC
     """)
@@ -839,6 +862,9 @@ def api_admin_visitors():
             "email": r[7],
             "status": r[8],
             "created_at": r[9],
+            "decision_note": r[10],
+            "decided_by": r[11],
+            "decided_at": r[12],
         })
 
     return jsonify(visitors)
@@ -846,10 +872,31 @@ def api_admin_visitors():
 @app.route('/api/admin/approve/<int:visitor_id>', methods=['POST'])
 def api_admin_approve(visitor_id):
     try:
+        # 🔵 NEW: read JSON body from Android
+        data = request.get_json(silent=True) or {}
+        note = (data.get("note") or "").strip()
+
+        decided_by = "admin"  # later this comes from login token
+        decided_at = datetime.now(ZoneInfo("Asia/Manila")).strftime("%Y-%m-%d %H:%M:%S")
+
         conn = sqlite3.connect('visitors.db')
         cursor = conn.cursor()
 
-        cursor.execute("UPDATE visitors SET status='Approved' WHERE id=?", (visitor_id,))
+        # 🔵 UPDATED: save note + decision info
+        cursor.execute("""
+            UPDATE visitors
+            SET status='Approved',
+                decision_note=?,
+                decided_by=?,
+                decided_at=?
+            WHERE id=?
+        """, (
+            note if note else None,
+            decided_by,
+            decided_at,
+            visitor_id
+        ))
+
         conn.commit()
 
         cursor.execute("SELECT email FROM visitors WHERE id=?", (visitor_id,))
@@ -861,7 +908,6 @@ def api_admin_approve(visitor_id):
 
         email = row[0]
 
-        # link that shows visitor QR code (you said this already works)
         qr_link = f"https://emailandmobileapp.onrender.com/generate_qr/{visitor_id}"
 
         message = Mail(
@@ -881,7 +927,11 @@ def api_admin_approve(visitor_id):
         except Exception as e:
             print("Approval email failed:", e)
 
-        return jsonify({"success": True, "message": "Approved and email sent"})
+        return jsonify({
+            "success": True,
+            "message": "Approved",
+            "note_saved": bool(note)
+        })
 
     except Exception as e:
         print("api_admin_approve error:", e)
@@ -891,10 +941,28 @@ def api_admin_approve(visitor_id):
 @app.route('/api/admin/decline/<int:visitor_id>', methods=['POST'])
 def api_admin_decline(visitor_id):
     try:
+        data = request.get_json(silent=True) or {}
+        note = (data.get("note") or "").strip()
+
+        decided_by = "admin"  # later from token
+        decided_at = datetime.now(ZoneInfo("Asia/Manila")).strftime("%Y-%m-%d %H:%M:%S")
+
         conn = sqlite3.connect('visitors.db')
         cursor = conn.cursor()
 
-        cursor.execute("UPDATE visitors SET status='Declined' WHERE id=?", (visitor_id,))
+        cursor.execute("""
+            UPDATE visitors
+            SET status='Declined',
+                decision_note=?,
+                decided_by=?,
+                decided_at=?
+            WHERE id=?
+        """, (
+            note if note else None,
+            decided_by,
+            decided_at,
+            visitor_id
+        ))
         conn.commit()
 
         cursor.execute("SELECT email FROM visitors WHERE id=?", (visitor_id,))
@@ -906,11 +974,16 @@ def api_admin_decline(visitor_id):
 
         email = row[0]
 
+        note_html = f"<p><b>Reason / Note:</b> {note}</p>" if note else ""
+
         message = Mail(
             from_email=EMAIL_ADDRESS,
             to_emails=email,
             subject="Visit Declined - La Concepcion College",
-            html_content="<p>We are sorry, your visit request was <b>declined</b>.</p>"
+            html_content=f"""
+                <p>We are sorry, your visit request was <b>declined</b>.</p>
+                {note_html}
+            """
         )
 
         try:
@@ -919,7 +992,11 @@ def api_admin_decline(visitor_id):
         except Exception as e:
             print("Decline email failed:", e)
 
-        return jsonify({"success": True, "message": "Declined and email sent"})
+        return jsonify({
+            "success": True,
+            "message": "Declined",
+            "note_saved": bool(note)
+        })
 
     except Exception as e:
         print("api_admin_decline error:", e)
@@ -936,7 +1013,7 @@ def api_dep_visitors():
     cursor = conn.cursor()
 
     cursor.execute("""
-        SELECT id, name, reason, department, person_to_visit, visit_date, visit_time, email, status, created_at
+        SELECT id, name, reason, department, person_to_visit, visit_date, visit_time, email, status, created_at, decision_note, decided_by, decided_at
         FROM visitors
         WHERE department = ?
         ORDER BY id DESC
@@ -957,6 +1034,9 @@ def api_dep_visitors():
             "email": r[7],
             "status": r[8],
             "created_at": r[9],
+            "decision_note": r[10],
+            "decided_by": r[11],
+            "decided_at": r[12],
         })
 
     return jsonify(visitors)
@@ -970,8 +1050,9 @@ def api_guard_get_visitor(visitor_id):
 
     cursor.execute("""
         SELECT id, name, reason, person_to_visit, department,
-               visit_date, visit_time, email, valid_id,
-               time_in, time_out, status, created_at
+       visit_date, visit_time, email, valid_id,
+       time_in, time_out, status, created_at,
+       decision_note, decided_by, decided_at
         FROM visitors
         WHERE id=?
     """, (visitor_id,))
@@ -998,6 +1079,9 @@ def api_guard_get_visitor(visitor_id):
             "time_out": row[10],
             "status": row[11],
             "created_at": row[12],
+            "decision_note": row[13],
+            "decided_by": row[14],
+            "decided_at": row[15],
         }
     })
 @app.route('/api/guard/scan/<int:visitor_id>', methods=['POST'])
