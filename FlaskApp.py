@@ -10,6 +10,8 @@ from zoneinfo import ZoneInfo
 app = Flask(__name__)
 app.secret_key = 'supersecretkey'
 
+TEST_MODE = True
+
 # ---------------- CONFIG ----------------
 UPLOAD_FOLDER = os.path.join('static', 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -119,11 +121,31 @@ def init_homepage_database():
     conn.commit()
     conn.close()
 
+def init_settings_database():
+    conn = sqlite3.connect('visitors.db')
+    cursor = conn.cursor()
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT
+        )
+    ''')
+
+    # default = OFF
+    cursor.execute(
+        "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
+        ("TEST_MODE", "0")
+    )
+
+    conn.commit()
+    conn.close()
 
 # Initialize databases
 init_visitor_database()
 init_admin_database()
 init_homepage_database()
+init_settings_database()
 
 
 # ---------------- EMAIL SETTINGS ----------------
@@ -188,6 +210,17 @@ def send_email_otp(to_email, otp):
 def generate_otp():
     return str(random.randint(100000, 999999))
 
+def is_test_mode():
+    conn = sqlite3.connect('visitors.db')
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT value FROM settings WHERE key='TEST_MODE'")
+    row = cursor.fetchone()
+
+    conn.close()
+
+    return row and row[0] == "1"
+
 
 # ---------------- ROUTES ----------------
 
@@ -230,35 +263,35 @@ def send_verification():
     visit_date = request.form['visit_date']
     visit_time = request.form['visit_time']
 
-    # ✅ Enforce date + time rules (Asia/Manila)
-    today_ph = datetime.now(ZoneInfo("Asia/Manila")).date()
-    selected_date = datetime.strptime(visit_date, "%Y-%m-%d").date()
+    # ✅ Enforce date and time rules ONLY if TEST MODE is OFF
+    if not is_test_mode():
+        today_ph = datetime.now(ZoneInfo("Asia/Manila")).date()
+        selected_date = datetime.strptime(visit_date, "%Y-%m-%d").date()
 
-    # Date must be tomorrow onwards
-    if selected_date <= today_ph:
-        return render_template(
-            "Error.html",
-            message="⚠️ Same-day appointments are not allowed. Please choose tomorrow or later."
-        )
+        # Date must be tomorrow onwards
+        if selected_date <= today_ph:
+            return render_template(
+                "Error.html",
+                message="⚠️ Same-day appointments are not allowed. Please choose tomorrow or later."
+            )
 
-    # Time must be 09:00–16:00
-    try:
-        selected_time = datetime.strptime(visit_time, "%H:%M").time()
-    except ValueError:
-        return render_template("Error.html", message="⚠️ Invalid time format.")
+        # Time must be 09:00–16:00
+        try:
+            selected_time = datetime.strptime(visit_time, "%H:%M").time()
+        except ValueError:
+            return render_template("Error.html", message="⚠️ Invalid time format.")
 
-    start_time = datetime.strptime("09:00", "%H:%M").time()
-    end_time = datetime.strptime("16:00", "%H:%M").time()
+        start_time = datetime.strptime("09:00", "%H:%M").time()
+        end_time = datetime.strptime("16:00", "%H:%M").time()
 
-    # Decide whether 4:00 PM is allowed:
-    # - If you want 4:00 PM allowed, keep `>` as below.
-    # - If you want only up to 3:59 PM, change to `>=`.
-    if selected_time < start_time or selected_time > end_time:
-        return render_template(
-            "Error.html",
-            message="⚠️ Visiting hours are only from 9:00 AM to 4:00 PM. Please select a valid time."
-        )
+        # If you want 4:00 PM allowed keep `>` as below.
+        if selected_time < start_time or selected_time > end_time:
+            return render_template(
+                "Error.html",
+                message="⚠️ Visiting hours are only from 9:00 AM to 4:00 PM. Please select a valid time."
+            )
 
+    # ---- continue with your existing code below ----
     conn = sqlite3.connect('visitors.db')
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM visitors WHERE name=? AND visit_date=? AND visit_time=?",
@@ -275,7 +308,7 @@ def send_verification():
         'name': name,
         'reason': request.form['reason'],
         'person_to_visit': request.form['person_to_visit'],
-        'department': request.form['department'],  # <-- new
+        'department': request.form['department'],
         'visit_date': visit_date,
         'visit_time': visit_time,
         'email': email
@@ -313,22 +346,18 @@ def send_verification():
         conn.close()
         return redirect('/generate_qr_form')
 
-    # Generate and send OTP
     otp = generate_otp()
     session['otp'] = otp
-    session['otp_timestamp'] = datetime.now().timestamp()  # For expiration checking
+    session['otp_timestamp'] = datetime.now().timestamp()
 
-    # Send email with proper error handling
     success, message = send_email_otp(email, otp)
 
     if success:
         return render_template('verify_email.html', email=email)
     else:
-        # Return error page with detailed message
         error_message = f"❌ Failed to send verification email. {message}"
         print(error_message)
         return render_template('Error.html', message=error_message)
-
 
 # Verify OTP
 @app.route('/verify_otp', methods=['POST'])
@@ -526,7 +555,12 @@ def admin_dashboard():
 
     visitors = cursor.fetchall()
     conn.close()
-    return render_template('admin_dashboard.html', visitors=visitors, filter_type=filter_type)
+    return render_template(
+        'admin_dashboard.html',
+        visitors=visitors,
+        filter_type=filter_type,
+        test_mode=TEST_MODE
+    )
 
 @app.route('/admin/approve/<int:visitor_id>')
 def approve_visitor(visitor_id):
@@ -662,6 +696,17 @@ def edit_homepage():
     homepage_content = {row[0]: row[1] for row in rows}
     conn.close()
     return render_template('edit_homepage.html', homepage=homepage_content)
+
+
+@app.route('/admin/toggle_test_mode')
+def toggle_test_mode():
+    global TEST_MODE
+
+    if 'admin' not in session:
+        return redirect('/admin/login')
+
+    TEST_MODE = not TEST_MODE
+    return redirect('/admin/dashboard')
 
 @app.route('/api/login', methods=['POST'])
 def api_login():

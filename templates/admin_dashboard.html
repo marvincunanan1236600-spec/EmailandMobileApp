@@ -152,6 +152,26 @@ tr:hover {
     <div class="container">
         <h1>Admin Dashboard</h1>
 
+        <div style="margin-bottom:15px;">
+         <strong>Test Mode:</strong>
+
+    {% if test_mode %}
+        <span style="color:lime;">ON (Testing Allowed)</span>
+    {% else %}
+        <span style="color:red;">OFF (Production Rules)</span>
+    {% endif %}
+
+    <a href="/admin/toggle_test_mode"
+       style="margin-left:10px;
+              padding:6px 12px;
+              background:#007bff;
+              color:white;
+              border-radius:6px;
+              text-decoration:none;">
+        Toggle Test Mode
+    </a>
+</div>
+
         <div class="buttons">
             <!-- Button to edit homepage content -->
             <a href="{{ url_for('edit_homepage') }}" class="edit-btn">Edit Homepage Content</a>
