@@ -206,12 +206,34 @@ def init_settings_database():
     conn.commit()
     conn.close()
 
+
+def init_notifications_database():
+    conn = sqlite3.connect("visitors.db")
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS notifications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            target_role TEXT NOT NULL,           -- "admin" | "guard" | "dep_head"
+            target_department TEXT,              -- nullable, for dep_head notifications
+            title TEXT NOT NULL,
+            body TEXT NOT NULL,
+            type TEXT NOT NULL,                  -- "NEW_PENDING" | "APPROVED" | "DECLINED" | "TIME_IN" | "TIME_OUT"
+            visitor_id INTEGER,
+            created_at TEXT NOT NULL,
+            is_read INTEGER DEFAULT 0
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+
 # Initialize databases
 init_visitor_database()
 init_admin_database()
 init_homepage_database()
 init_settings_database()
 migrate_visitors_add_decision_fields()
+init_notifications_database()
 
 
 # ---------------- EMAIL SETTINGS ----------------
@@ -286,6 +308,49 @@ def is_test_mode():
     conn.close()
 
     return row and row[0] == "1"
+
+
+def add_notification(target_role, title, body, type_, visitor_id=None, target_department=None):
+    conn = sqlite3.connect("visitors.db")
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO notifications (target_role, target_department, title, body, type, visitor_id, created_at, is_read)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 0)
+    """, (
+        target_role,
+        target_department,
+        title,
+        body,
+        type_,
+        visitor_id,
+        datetime.now(ZoneInfo("Asia/Manila")).strftime("%Y-%m-%d %H:%M:%S")
+    ))
+    conn.commit()
+    conn.close()
+
+def get_visitor_brief(visitor_id: int):
+    conn = sqlite3.connect("visitors.db")
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT name, department, person_to_visit, visit_date, visit_time
+        FROM visitors
+        WHERE id=?
+    """, (visitor_id,))
+
+    row = cursor.fetchone()
+    conn.close()
+
+    if not row:
+        return None
+
+    return {
+        "name": row[0],
+        "department": row[1],
+        "person_to_visit": row[2],
+        "visit_date": row[3],
+        "visit_time": row[4],
+    }
 
 
 # ---------------- ROUTES ----------------
@@ -487,6 +552,24 @@ def verify_otp():
 
         conn.commit()
         conn.close()
+
+        # ✅ NEW: Notifications (admin + department head)
+        add_notification(
+            target_role="admin",
+            title="New Appointment Request",
+            body=f"{visitor_info['name']} requested a visit to {visitor_info['person_to_visit']} ({visitor_info['department']}).",
+            type_="NEW_PENDING",
+            visitor_id=visitor_id
+        )
+
+        add_notification(
+            target_role="dep_head",
+            target_department=visitor_info["department"],
+            title="New Pending Visitor",
+            body=f"{visitor_info['name']} is requesting to visit {visitor_info['person_to_visit']}.",
+            type_="NEW_PENDING",
+            visitor_id=visitor_id
+        )
 
         session['verified_email'] = visitor_info['email']
 
@@ -899,6 +982,47 @@ def api_admin_approve(visitor_id):
 
         conn.commit()
 
+        # ⭐ NEW: create notification for guard
+        brief = get_visitor_brief(visitor_id)
+        if brief:
+            add_notification(
+                target_role="guard",
+                title="Visitor Approved",
+                body=f"{brief['name']} ({brief['department']}) approved for {brief['visit_date']} {brief['visit_time']}.",
+                type_="APPROVED",
+                visitor_id=visitor_id
+            )
+
+        if brief:
+            add_notification(
+                target_role="dep_head",
+                target_department=brief["department"],
+                title="Visitor Approved",
+                body=f"{brief['name']} approved. Visiting {brief['person_to_visit']}.",
+                type_="APPROVED",
+                visitor_id=visitor_id
+            )
+
+        brief = get_visitor_brief(visitor_id)
+        if brief:
+            add_notification(
+                target_role="guard",
+                title="Visitor Declined",
+                body=f"{brief['name']} ({brief['department']}) was declined.",
+                type_="DECLINED",
+                visitor_id=visitor_id
+            )
+
+        if brief:
+            add_notification(
+                target_role="dep_head",
+                target_department=brief["department"],
+                title="Visitor Declined",
+                body=f"{brief['name']} was declined.",
+                type_="DECLINED",
+                visitor_id=visitor_id
+            )
+
         cursor.execute("SELECT email FROM visitors WHERE id=?", (visitor_id,))
         row = cursor.fetchone()
         conn.close()
@@ -1283,6 +1407,114 @@ def api_guard_today():
         "server_today_ph": today_ph,   # helpful debug
         "count": len(visitors)
     })
+
+@app.route("/api/notifications", methods=["GET"])
+def api_get_notifications():
+    role = request.args.get("role")
+    department = request.args.get("department")  # optional
+
+    if not role:
+        return jsonify({"success": False, "message": "Missing role"}), 400
+
+    conn = sqlite3.connect("visitors.db")
+    cursor = conn.cursor()
+
+    # dep_head can be filtered by department
+    if role == "dep_head" and department:
+        cursor.execute("""
+            SELECT id, target_role, target_department, title, body, type, visitor_id, created_at, is_read
+            FROM notifications
+            WHERE target_role=?
+              AND (target_department=? OR target_department IS NULL)
+            ORDER BY id DESC
+            LIMIT 100
+        """, (role, department))
+    else:
+        cursor.execute("""
+            SELECT id, target_role, target_department, title, body, type, visitor_id, created_at, is_read
+            FROM notifications
+            WHERE target_role=?
+            ORDER BY id DESC
+            LIMIT 100
+        """, (role,))
+
+    rows = cursor.fetchall()
+    conn.close()
+
+    notifications = []
+    unread_count = 0
+
+    for r in rows:
+        is_read = int(r[8]) if r[8] is not None else 0
+        if is_read == 0:
+            unread_count += 1
+
+        notifications.append({
+            "id": r[0],
+            "target_role": r[1],
+            "target_department": r[2],
+            "title": r[3],
+            "body": r[4],
+            "type": r[5],
+            "visitor_id": r[6],
+            "created_at": r[7],
+            "is_read": is_read
+        })
+
+    return jsonify({
+        "success": True,
+        "notifications": notifications,
+        "unread_count": unread_count
+    })
+
+@app.route("/api/notifications/read/<int:notif_id>", methods=["POST"])
+def api_mark_notification_read(notif_id):
+    conn = sqlite3.connect("visitors.db")
+    cursor = conn.cursor()
+
+    cursor.execute("UPDATE notifications SET is_read=1 WHERE id=?", (notif_id,))
+    conn.commit()
+
+    cursor.execute("SELECT changes()")
+    changed = cursor.fetchone()[0]
+
+    conn.close()
+
+    if changed == 0:
+        return jsonify({"success": False, "message": "Notification not found"}), 404
+
+    return jsonify({"success": True})
+
+@app.route("/api/notifications/read_all", methods=["POST"])
+def api_mark_all_read():
+    data = request.get_json(silent=True) or {}
+    role = data.get("role")
+    department = data.get("department")
+
+    if not role:
+        return jsonify({"success": False, "message": "Missing role"}), 400
+
+    conn = sqlite3.connect("visitors.db")
+    cursor = conn.cursor()
+
+    if role == "dep_head" and department:
+        cursor.execute("""
+            UPDATE notifications
+            SET is_read=1
+            WHERE target_role=?
+              AND (target_department=? OR target_department IS NULL)
+        """, (role, department))
+    else:
+        cursor.execute("""
+            UPDATE notifications
+            SET is_read=1
+            WHERE target_role=?
+        """, (role,))
+
+    conn.commit()
+    conn.close()
+
+    return jsonify({"success": True})
 
 
 # Run Flask
