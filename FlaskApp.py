@@ -955,17 +955,16 @@ def api_admin_visitors():
 @app.route('/api/admin/approve/<int:visitor_id>', methods=['POST'])
 def api_admin_approve(visitor_id):
     try:
-        # 🔵 NEW: read JSON body from Android
         data = request.get_json(silent=True) or {}
         note = (data.get("note") or "").strip()
 
-        decided_by = "admin"  # later this comes from login token
+        decided_by = "admin"  # later: from auth token/session
         decided_at = datetime.now(ZoneInfo("Asia/Manila")).strftime("%Y-%m-%d %H:%M:%S")
 
         conn = sqlite3.connect('visitors.db')
         cursor = conn.cursor()
 
-        # 🔵 UPDATED: save note + decision info
+        # Update visitor decision
         cursor.execute("""
             UPDATE visitors
             SET status='Approved',
@@ -973,16 +972,20 @@ def api_admin_approve(visitor_id):
                 decided_by=?,
                 decided_at=?
             WHERE id=?
-        """, (
-            note if note else None,
-            decided_by,
-            decided_at,
-            visitor_id
-        ))
-
+        """, (note if note else None, decided_by, decided_at, visitor_id))
         conn.commit()
 
-        # ⭐ NEW: create notification for guard
+        # Remove old decision notifications for this visitor (guard + dep_head)
+        cursor.execute("""
+            DELETE FROM notifications
+            WHERE visitor_id=?
+              AND type IN ('APPROVED','DECLINED')
+        """, (visitor_id,))
+        conn.commit()
+
+        conn.close()
+
+        # Create APPROVED notifications
         brief = get_visitor_brief(visitor_id)
         if brief:
             add_notification(
@@ -993,7 +996,6 @@ def api_admin_approve(visitor_id):
                 visitor_id=visitor_id
             )
 
-        if brief:
             add_notification(
                 target_role="dep_head",
                 target_department=brief["department"],
@@ -1003,26 +1005,9 @@ def api_admin_approve(visitor_id):
                 visitor_id=visitor_id
             )
 
-        brief = get_visitor_brief(visitor_id)
-        if brief:
-            add_notification(
-                target_role="guard",
-                title="Visitor Declined",
-                body=f"{brief['name']} ({brief['department']}) was declined.",
-                type_="DECLINED",
-                visitor_id=visitor_id
-            )
-
-        if brief:
-            add_notification(
-                target_role="dep_head",
-                target_department=brief["department"],
-                title="Visitor Declined",
-                body=f"{brief['name']} was declined.",
-                type_="DECLINED",
-                visitor_id=visitor_id
-            )
-
+        # Email
+        conn = sqlite3.connect('visitors.db')
+        cursor = conn.cursor()
         cursor.execute("SELECT email FROM visitors WHERE id=?", (visitor_id,))
         row = cursor.fetchone()
         conn.close()
@@ -1031,7 +1016,6 @@ def api_admin_approve(visitor_id):
             return jsonify({"success": False, "message": "Visitor not found"}), 404
 
         email = row[0]
-
         qr_link = f"https://emailandmobileapp.onrender.com/generate_qr/{visitor_id}"
 
         message = Mail(
@@ -1051,11 +1035,7 @@ def api_admin_approve(visitor_id):
         except Exception as e:
             print("Approval email failed:", e)
 
-        return jsonify({
-            "success": True,
-            "message": "Approved",
-            "note_saved": bool(note)
-        })
+        return jsonify({"success": True, "message": "Approved", "note_saved": bool(note)})
 
     except Exception as e:
         print("api_admin_approve error:", e)
@@ -1074,6 +1054,7 @@ def api_admin_decline(visitor_id):
         conn = sqlite3.connect('visitors.db')
         cursor = conn.cursor()
 
+        # Update visitor decision
         cursor.execute("""
             UPDATE visitors
             SET status='Declined',
@@ -1089,6 +1070,15 @@ def api_admin_decline(visitor_id):
         ))
         conn.commit()
 
+        # ✅ Remove old decision notifications for this visitor (so we don't show both)
+        cursor.execute("""
+            DELETE FROM notifications
+            WHERE visitor_id=?
+              AND type IN ('APPROVED','DECLINED')
+        """, (visitor_id,))
+        conn.commit()
+
+        # Get email
         cursor.execute("SELECT email FROM visitors WHERE id=?", (visitor_id,))
         row = cursor.fetchone()
         conn.close()
@@ -1098,6 +1088,27 @@ def api_admin_decline(visitor_id):
 
         email = row[0]
 
+        # ✅ Create DECLINED notifications
+        brief = get_visitor_brief(visitor_id)
+        if brief:
+            add_notification(
+                target_role="guard",
+                title="Visitor Declined",
+                body=f"{brief['name']} ({brief['department']}) was declined.",
+                type_="DECLINED",
+                visitor_id=visitor_id
+            )
+
+            add_notification(
+                target_role="dep_head",
+                target_department=brief["department"],
+                title="Visitor Declined",
+                body=f"{brief['name']} was declined.",
+                type_="DECLINED",
+                visitor_id=visitor_id
+            )
+
+        # Email (include note)
         note_html = f"<p><b>Reason / Note:</b> {note}</p>" if note else ""
 
         message = Mail(
