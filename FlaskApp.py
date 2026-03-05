@@ -911,33 +911,42 @@ def api_login():
 
 @app.route('/api/admin/visitors', methods=['GET'])
 def api_admin_visitors():
-    conn = sqlite3.connect('visitors.db')
-    cursor = conn.cursor()
-
-    cursor.execute("""
-        SELECT id, name, reason, department, person_to_visit, visit_date, visit_time, email, status, created_at, decision_note, decided_by, decided_at
-        FROM visitors
-        ORDER BY id DESC
+    rows = fetchall("""
+        select
+            id,
+            name,
+            reason,
+            department,
+            person_to_visit,
+            visit_date,
+            visit_time,
+            email,
+            status,
+            created_at,
+            decision_note,
+            decided_by,
+            decided_at
+        from public.visitors
+        order by id desc
     """)
-    rows = cursor.fetchall()
-    conn.close()
 
+    # rows are dicts because you used row_factory=dict_row
     visitors = []
     for r in rows:
         visitors.append({
-            "id": r[0],
-            "name": r[1],
-            "reason": r[2],
-            "department": r[3],
-            "person_to_visit": r[4],
-            "visit_date": r[5],
-            "visit_time": r[6],
-            "email": r[7],
-            "status": r[8],
-            "created_at": r[9],
-            "decision_note": r[10],
-            "decided_by": r[11],
-            "decided_at": r[12],
+            "id": r["id"],
+            "name": r["name"],
+            "reason": r["reason"],
+            "department": r["department"],
+            "person_to_visit": r["person_to_visit"],
+            "visit_date": str(r["visit_date"]) if r["visit_date"] else None,
+            "visit_time": str(r["visit_time"]) if r["visit_time"] else None,
+            "email": r["email"],
+            "status": r["status"],
+            "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+            "decision_note": r["decision_note"],
+            "decided_by": r["decided_by"],
+            "decided_at": r["decided_at"].isoformat() if r["decided_at"] else None,
         })
 
     return jsonify(visitors)
