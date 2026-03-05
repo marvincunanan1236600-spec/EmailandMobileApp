@@ -1316,61 +1316,71 @@ def api_guard_get_visitor(visitor_id):
     })
 @app.route('/api/guard/scan/<int:visitor_id>', methods=['POST'])
 def api_guard_scan(visitor_id):
-    conn = sqlite3.connect('visitors.db')
-    cursor = conn.cursor()
-
-    cursor.execute("""
-        SELECT id, name, department, person_to_visit,
-               visit_date, visit_time, status, time_in, time_out
-        FROM visitors WHERE id=?
+    # 1) Read visitor
+    row = fetchone("""
+        select
+            id, name, department, person_to_visit,
+            visit_date, visit_time, status, time_in, time_out
+        from public.visitors
+        where id = %s
     """, (visitor_id,))
-    row = cursor.fetchone()
 
     if not row:
-        conn.close()
         return jsonify({"success": False, "message": "Visitor not found"}), 404
 
-    (vid, name, dept, person, vdate, vtime, status, time_in, time_out) = row
+    vid = row["id"]
+    name = row["name"]
+    vdate = row["visit_date"]            # date
+    status = row["status"]
+    time_in = row["time_in"]             # timestamptz or None
+    time_out = row["time_out"]           # timestamptz or None
 
     # ✅ Status must be Approved
     if status != "Approved":
-        conn.close()
         return jsonify({"success": False, "message": f"Not allowed: status is {status}"}), 403
 
     # ✅ Expiration check: compare visit_date to today (Manila)
-    today = datetime.now(ZoneInfo("Asia/Manila")).strftime("%Y-%m-%d")
-    if vdate != today:
-        conn.close()
-        return jsonify({"success": False, "message": f"Not allowed: appointment date is {vdate}"}), 403
+    today_ph = datetime.now(ZoneInfo("Asia/Manila")).date()
+    if vdate != today_ph:
+        return jsonify({
+            "success": False,
+            "message": f"Not allowed: appointment date is {vdate}"
+        }), 403
 
-    now_str = datetime.now(ZoneInfo("Asia/Manila")).strftime("%Y-%m-%d %H:%M:%S")
+    # ✅ Use a real timestamptz value (UTC-aware)
+    now_dt = datetime.now(ZoneInfo("Asia/Manila"))  # timezone-aware datetime
 
     # If no time_in yet → auto TIME IN
-    if not time_in:
-        cursor.execute("UPDATE visitors SET time_in=? WHERE id=?", (now_str, vid))
-        conn.commit()
-        conn.close()
+    if time_in is None:
+        execute("""
+            update public.visitors
+            set time_in = %s
+            where id = %s
+        """, (now_dt, vid))
+
         return jsonify({
             "success": True,
             "action": "TIME_IN",
             "message": f"Time-in recorded for {name}",
-            "time": now_str
+            "time": now_dt.isoformat()
         })
 
     # If time_in exists but no time_out yet → auto TIME OUT
-    if time_in and not time_out:
-        cursor.execute("UPDATE visitors SET time_out=? WHERE id=?", (now_str, vid))
-        conn.commit()
-        conn.close()
+    if time_in is not None and time_out is None:
+        execute("""
+            update public.visitors
+            set time_out = %s
+            where id = %s
+        """, (now_dt, vid))
+
         return jsonify({
             "success": True,
             "action": "TIME_OUT",
             "message": f"Time-out recorded for {name}",
-            "time": now_str
+            "time": now_dt.isoformat()
         })
 
     # If both exist → already completed
-    conn.close()
     return jsonify({
         "success": False,
         "message": "Visitor already timed out (visit completed)."
