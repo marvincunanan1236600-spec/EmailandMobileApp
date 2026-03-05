@@ -406,64 +406,71 @@ def accept_terms():
 # Send OTP for verification
 @app.route('/send_verification', methods=['POST'])
 def send_verification():
-    name = request.form['name']
-    email = request.form['email']
-    visit_date = request.form['visit_date']
-    visit_time = request.form['visit_time']
+    name = request.form['name'].strip()
+    email = request.form['email'].strip()
+    visit_date = request.form['visit_date'].strip()
+    visit_time = request.form['visit_time'].strip()
+
+    # Normalize time to HH:MM:SS for Postgres time type (safer)
+    if len(visit_time) == 5:
+        visit_time = visit_time + ":00"
 
     # ✅ Enforce date and time rules ONLY if TEST MODE is OFF
     if not is_test_mode():
         today_ph = datetime.now(ZoneInfo("Asia/Manila")).date()
         selected_date = datetime.strptime(visit_date, "%Y-%m-%d").date()
 
-        # Date must be tomorrow onwards
         if selected_date <= today_ph:
             return render_template(
                 "Error.html",
                 message="⚠️ Same-day appointments are not allowed. Please choose tomorrow or later."
             )
 
-        # Time must be 09:00–16:00
         try:
-            selected_time = datetime.strptime(visit_time, "%H:%M").time()
+            selected_time = datetime.strptime(visit_time, "%H:%M:%S").time()
         except ValueError:
             return render_template("Error.html", message="⚠️ Invalid time format.")
 
-        start_time = datetime.strptime("09:00", "%H:%M").time()
-        end_time = datetime.strptime("16:00", "%H:%M").time()
+        start_time = datetime.strptime("09:00:00", "%H:%M:%S").time()
+        end_time = datetime.strptime("16:00:00", "%H:%M:%S").time()
 
-        # If you want 4:00 PM allowed keep `>` as below.
         if selected_time < start_time or selected_time > end_time:
             return render_template(
                 "Error.html",
                 message="⚠️ Visiting hours are only from 9:00 AM to 4:00 PM. Please select a valid time."
             )
 
-    # ---- continue with your existing code below ----
-    conn = sqlite3.connect('visitors.db')
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM visitors WHERE name=? AND visit_date=? AND visit_time=?",
-                   (name, visit_date, visit_time))
-    if cursor.fetchone():
-        conn.close()
-        return render_template('Error.html', message="⚠️ You already have an appointment for this date and time.")
+    # ✅ Duplicate appointment check in SUPABASE
+    # (same name + date + time)
+    exists = fetchone("""
+        select id
+        from public.visitors
+        where name = %s
+          and visit_date = %s
+          and visit_time = %s
+        limit 1
+    """, (name, visit_date, visit_time))
 
-    cursor.execute("SELECT is_verified FROM visitors WHERE email=?", (email,))
-    verified_record = cursor.fetchone()
-    conn.close()
+    if exists:
+        return render_template(
+            'Error.html',
+            message="⚠️ You already have an appointment for this date and time."
+        )
 
+    # Store visitor info in session (used by verify_otp)
     session['visitor_info'] = {
         'name': name,
-        'reason': request.form['reason'],
-        'person_to_visit': request.form['person_to_visit'],
-        'department': request.form['department'],
+        'reason': request.form['reason'].strip(),
+        'person_to_visit': request.form['person_to_visit'].strip(),
+        'department': request.form['department'].strip(),
         'visit_date': visit_date,
-        'visit_time': visit_time,
+        'visit_time': visit_time,  # now HH:MM:SS
         'email': email
     }
 
+    # Save uploaded ID filename (file is still stored on Render disk)
     file = request.files.get('valid_id')
-    if file and file.filename != '':
+    if file and file.filename:
         filename = secure_filename(file.filename)
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(file_path)
@@ -471,41 +478,20 @@ def send_verification():
     else:
         session['valid_id_filename'] = None
 
-    if verified_record and verified_record[0] == 1:
-        session['verified_email'] = email
-        conn = sqlite3.connect('visitors.db')
-        cursor = conn.cursor()
-        cursor.execute('''
-            INSERT INTO visitors (name, reason, person_to_visit, department, visit_date, visit_time, email, valid_id, created_at, is_verified)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (
-            name,
-            session['visitor_info']['reason'],
-            session['visitor_info']['person_to_visit'],
-            session['visitor_info']['department'],
-            visit_date,
-            visit_time,
-            email,
-            session.get('valid_id_filename'),
-            datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            1
-        ))
-        conn.commit()
-        conn.close()
-        return redirect('/generate_qr_form')
-
+    # OTP
     otp = generate_otp()
     session['otp'] = otp
     session['otp_timestamp'] = datetime.now().timestamp()
 
-    success, message = send_email_otp(email, otp)
+    success, msg = send_email_otp(email, otp)
 
     if success:
         return render_template('verify_email.html', email=email)
-    else:
-        error_message = f"❌ Failed to send verification email. {message}"
-        print(error_message)
-        return render_template('Error.html', message=error_message)
+
+    error_message = f"❌ Failed to send verification email. {msg}"
+    print(error_message)
+    return render_template('Error.html', message=error_message)
+
 
 # Verify OTP
 @app.route('/verify_otp', methods=['POST'])
@@ -713,26 +699,43 @@ def admin_dashboard():
         return redirect('/admin/login')
 
     filter_type = request.args.get('filter')
-    conn = sqlite3.connect('visitors.db')
-    cursor = conn.cursor()
 
+    where_sql = ""
     if filter_type == 'week':
-        start_date = datetime.now() - timedelta(days=7)
-        cursor.execute("SELECT * FROM visitors WHERE created_at >= ? ORDER BY id DESC",
-                       (start_date.strftime('%Y-%m-%d %H:%M:%S'),))
+        where_sql = "where created_at >= (now() - interval '7 days')"
     elif filter_type == 'month':
-        start_date = datetime.now() - timedelta(days=30)
-        cursor.execute("SELECT * FROM visitors WHERE created_at >= ? ORDER BY id DESC",
-                       (start_date.strftime('%Y-%m-%d %H:%M:%S'),))
+        where_sql = "where created_at >= (now() - interval '30 days')"
     elif filter_type == 'year':
-        start_date = datetime.now() - timedelta(days=365)
-        cursor.execute("SELECT * FROM visitors WHERE created_at >= ? ORDER BY id DESC",
-                       (start_date.strftime('%Y-%m-%d %H:%M:%S'),))
-    else:
-        cursor.execute("SELECT * FROM visitors ORDER BY id DESC")
+        where_sql = "where created_at >= (now() - interval '365 days')"
 
-    visitors = cursor.fetchall()
-    conn.close()
+    rows = fetchall(f"""
+        select
+            id, name, reason, person_to_visit, department,
+            visit_date, visit_time, email, valid_id,
+            time_in, time_out, status, created_at
+        from public.visitors
+        {where_sql}
+        order by id desc
+    """)
+
+    visitors = []
+    for r in rows:
+        visitors.append((
+            r["id"],                                        # [0]
+            r["name"],                                      # [1]
+            r["reason"],                                    # [2]
+            r["person_to_visit"],                           # [3]
+            r["department"],                                # [4]
+            str(r["visit_date"]) if r["visit_date"] else "",# [5]
+            str(r["visit_time"]) if r["visit_time"] else "",# [6]
+            r["email"],                                     # [7]
+            r["valid_id"],                                  # [8]
+            r["time_in"].isoformat() if r["time_in"] else "",    # [9]
+            r["time_out"].isoformat() if r["time_out"] else "",  # [10]
+            r["status"],                                    # [11]
+            r["created_at"].isoformat() if r["created_at"] else "" # [12]
+        ))
+
     return render_template(
         'admin_dashboard.html',
         visitors=visitors,
@@ -745,35 +748,64 @@ def approve_visitor(visitor_id):
     if 'admin' not in session:
         return redirect('/admin/login')
 
-    conn = sqlite3.connect('visitors.db')
-    cursor = conn.cursor()
+    decided_by = session.get("admin", "admin")
+    decided_at = datetime.now(ZoneInfo("Asia/Manila"))
 
-    cursor.execute("UPDATE visitors SET status='Approved' WHERE id=?", (visitor_id,))
-    conn.commit()
+    execute("""
+        update public.visitors
+        set status='Approved',
+            decided_by=%s,
+            decided_at=%s
+        where id=%s
+    """, (decided_by, decided_at, visitor_id))
 
-    cursor.execute("SELECT email FROM visitors WHERE id=?", (visitor_id,))
-    email = cursor.fetchone()[0]
-    conn.close()
+    # Clean old decision notifications
+    execute("""
+        delete from public.notifications
+        where visitor_id = %s
+          and type in ('APPROVED', 'DECLINED')
+    """, (visitor_id,))
 
-    # Send approval email with QR link
-    qr_link = f"https://emailandmobileapp.onrender.com/generate_qr/{visitor_id}"
+    # Notify guard + dep_head
+    brief = get_visitor_brief(visitor_id)
+    if brief:
+        add_notification(
+            target_role="guard",
+            title="Visitor Approved",
+            body=f"{brief['name']} ({brief['department']}) approved for {brief['visit_date']} {brief['visit_time']}.",
+            type_="APPROVED",
+            visitor_id=visitor_id
+        )
+        add_notification(
+            target_role="dep_head",
+            target_department=brief["department"],
+            title="Visitor Approved",
+            body=f"{brief['name']} approved. Visiting {brief['person_to_visit']}.",
+            type_="APPROVED",
+            visitor_id=visitor_id
+        )
 
-    message = Mail(
-        from_email=EMAIL_ADDRESS,
-        to_emails=email,
-        subject="Visit Approved - La Concepcion College",
-        html_content=f"""
-        <p>Your visit has been approved.</p>
-        <p>Please save your QR code here:</p>
-        <a href="{qr_link}">{qr_link}</a>
-        """
-    )
+    # Email QR link
+    row = fetchone("select email from public.visitors where id=%s", (visitor_id,))
+    if row:
+        email = row["email"]
+        qr_link = f"https://emailandmobileapp.onrender.com/generate_qr/{visitor_id}"
 
-    try:
-        sg = SendGridAPIClient(SENDGRID_API_KEY)
-        sg.send(message)
-    except Exception as e:
-        print("Email sending failed:", e)
+        message = Mail(
+            from_email=EMAIL_ADDRESS,
+            to_emails=email,
+            subject="Visit Approved - La Concepcion College",
+            html_content=f"""
+                <p>Your visit has been <b>approved</b>.</p>
+                <p>Please save your QR code here:</p>
+                <a href="{qr_link}">{qr_link}</a>
+            """
+        )
+        try:
+            sg = SendGridAPIClient(SENDGRID_API_KEY)
+            sg.send(message)
+        except Exception as e:
+            print("Approval email failed:", e)
 
     return redirect('/admin/dashboard')
 
@@ -782,28 +814,55 @@ def decline_visitor(visitor_id):
     if 'admin' not in session:
         return redirect('/admin/login')
 
-    conn = sqlite3.connect('visitors.db')
-    cursor = conn.cursor()
+    decided_by = session.get("admin", "admin")
+    decided_at = datetime.now(ZoneInfo("Asia/Manila"))
 
-    cursor.execute("UPDATE visitors SET status='Declined' WHERE id=?", (visitor_id,))
-    conn.commit()
+    execute("""
+        update public.visitors
+        set status='Declined',
+            decided_by=%s,
+            decided_at=%s
+        where id=%s
+    """, (decided_by, decided_at, visitor_id))
 
-    cursor.execute("SELECT email FROM visitors WHERE id=?", (visitor_id,))
-    email = cursor.fetchone()[0]
-    conn.close()
+    execute("""
+        delete from public.notifications
+        where visitor_id = %s
+          and type in ('APPROVED', 'DECLINED')
+    """, (visitor_id,))
 
-    message = Mail(
-        from_email=EMAIL_ADDRESS,
-        to_emails=email,
-        subject="Visit Declined",
-        html_content="<p>We are sorry, your visit request was declined.</p>"
-    )
+    brief = get_visitor_brief(visitor_id)
+    if brief:
+        add_notification(
+            target_role="guard",
+            title="Visitor Declined",
+            body=f"{brief['name']} ({brief['department']}) was declined.",
+            type_="DECLINED",
+            visitor_id=visitor_id
+        )
+        add_notification(
+            target_role="dep_head",
+            target_department=brief["department"],
+            title="Visitor Declined",
+            body=f"{brief['name']} was declined.",
+            type_="DECLINED",
+            visitor_id=visitor_id
+        )
 
-    try:
-        sg = SendGridAPIClient(SENDGRID_API_KEY)
-        sg.send(message)
-    except Exception as e:
-        print("Email sending failed:", e)
+    row = fetchone("select email from public.visitors where id=%s", (visitor_id,))
+    if row:
+        email = row["email"]
+        message = Mail(
+            from_email=EMAIL_ADDRESS,
+            to_emails=email,
+            subject="Visit Declined - La Concepcion College",
+            html_content="<p>We are sorry, your visit request was <b>declined</b>.</p>"
+        )
+        try:
+            sg = SendGridAPIClient(SENDGRID_API_KEY)
+            sg.send(message)
+        except Exception as e:
+            print("Decline email failed:", e)
 
     return redirect('/admin/dashboard')
 
@@ -815,36 +874,54 @@ def download_csv():
         return redirect('/admin/login')
 
     filter_type = request.args.get('filter')
-    conn = sqlite3.connect('visitors.db')
-    cursor = conn.cursor()
+
+    where_sql = ""
     if filter_type == 'week':
-        start_date = datetime.now() - timedelta(days=7)
-        cursor.execute("SELECT * FROM visitors WHERE created_at >= ? ORDER BY id DESC",
-                       (start_date.strftime('%Y-%m-%d %H:%M:%S'),))
+        where_sql = "where created_at >= (now() - interval '7 days')"
     elif filter_type == 'month':
-        start_date = datetime.now() - timedelta(days=30)
-        cursor.execute("SELECT * FROM visitors WHERE created_at >= ? ORDER BY id DESC",
-                       (start_date.strftime('%Y-%m-%d %H:%M:%S'),))
+        where_sql = "where created_at >= (now() - interval '30 days')"
     elif filter_type == 'year':
-        start_date = datetime.now() - timedelta(days=365)
-        cursor.execute("SELECT * FROM visitors WHERE created_at >= ? ORDER BY id DESC",
-                       (start_date.strftime('%Y-%m-%d %H:%M:%S'),))
-    else:
-        cursor.execute("SELECT * FROM visitors ORDER BY id DESC")
-    visitors = cursor.fetchall()
-    conn.close()
+        where_sql = "where created_at >= (now() - interval '365 days')"
+
+    rows = fetchall(f"""
+        select
+            id, name, reason, department, person_to_visit,
+            visit_date, visit_time, email, valid_id,
+            time_in, time_out, status, created_at
+        from public.visitors
+        {where_sql}
+        order by id desc
+    """)
 
     def generate():
         data = io.StringIO()
         writer = csv.writer(data)
-        writer.writerow(
-            ['ID', 'Name', 'Reason', 'Person to Visit', 'Date', 'Time', 'Email', 'Valid ID', 'Time In', 'Time Out',
-             'Created At'])
+
+        writer.writerow([
+            'ID', 'Name', 'Reason', 'Department', 'Person to Visit',
+            'Date', 'Time', 'Email', 'Valid ID',
+            'Time In', 'Time Out', 'Status', 'Created At'
+        ])
         yield data.getvalue()
         data.seek(0)
         data.truncate(0)
-        for row in visitors:
-            writer.writerow([row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9], row[10]])
+
+        for r in rows:
+            writer.writerow([
+                r["id"],
+                r["name"],
+                r["reason"],
+                r["department"],
+                r["person_to_visit"],
+                str(r["visit_date"]) if r["visit_date"] else "",
+                str(r["visit_time"]) if r["visit_time"] else "",
+                r["email"],
+                r["valid_id"] or "",
+                r["time_in"].isoformat() if r["time_in"] else "",
+                r["time_out"].isoformat() if r["time_out"] else "",
+                r["status"],
+                r["created_at"].isoformat() if r["created_at"] else "",
+            ])
             yield data.getvalue()
             data.seek(0)
             data.truncate(0)
@@ -1245,37 +1322,35 @@ def api_dep_visitors():
     if not department:
         return jsonify({"success": False, "message": "Missing department"}), 400
 
-    conn = sqlite3.connect('visitors.db')
-    cursor = conn.cursor()
-
-    cursor.execute("""
-        SELECT id, name, reason, department, person_to_visit, visit_date, visit_time, email, status, created_at, decision_note, decided_by, decided_at
-        FROM visitors
-        WHERE department = ?
-        ORDER BY id DESC
+    rows = fetchall("""
+        select
+            id, name, reason, department, person_to_visit,
+            visit_date, visit_time, email, status, created_at,
+            decision_note, decided_by, decided_at
+        from public.visitors
+        where department = %s
+        order by id desc
     """, (department,))
-    rows = cursor.fetchall()
-    conn.close()
 
     visitors = []
     for r in rows:
         visitors.append({
-            "id": r[0],
-            "name": r[1],
-            "reason": r[2],
-            "department": r[3],
-            "person_to_visit": r[4],
-            "visit_date": r[5],
-            "visit_time": r[6],
-            "email": r[7],
-            "status": r[8],
-            "created_at": r[9],
-            "decision_note": r[10],
-            "decided_by": r[11],
-            "decided_at": r[12],
+            "id": r["id"],
+            "name": r["name"],
+            "reason": r["reason"],
+            "department": r["department"],
+            "person_to_visit": r["person_to_visit"],
+            "visit_date": str(r["visit_date"]) if r["visit_date"] else None,
+            "visit_time": str(r["visit_time"]) if r["visit_time"] else None,
+            "email": r["email"],
+            "status": r["status"],
+            "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+            "decision_note": r["decision_note"],
+            "decided_by": r["decided_by"],
+            "decided_at": r["decided_at"].isoformat() if r["decided_at"] else None,
         })
 
-    return jsonify(visitors)
+    return jsonify({"success": True, "visitors": visitors})
 
 # ---------------- GUARD API ----------------
 
