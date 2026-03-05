@@ -7,7 +7,7 @@ from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 from zoneinfo import ZoneInfo
 from flask import jsonify, request
-from db import fetchone
+from db import fetchone, fetchall, execute
 
 app = Flask(__name__)
 app.secret_key = 'supersecretkey'
