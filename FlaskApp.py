@@ -1380,41 +1380,36 @@ def api_guard_scan(visitor_id):
 def api_guard_today():
     today_ph = datetime.now(ZoneInfo("Asia/Manila")).date().isoformat()  # "YYYY-MM-DD"
 
-    conn = sqlite3.connect("visitors.db")
-    cursor = conn.cursor()
-
-    cursor.execute("""
-        SELECT id, name, reason, department, person_to_visit, visit_date, visit_time,
-               email, status, time_in, time_out
-        FROM visitors
-        WHERE status = 'Approved'
-          AND visit_date = ?
-        ORDER BY visit_time ASC
+    rows = fetchall("""
+        select
+            id, name, reason, department, person_to_visit,
+            visit_date, visit_time, email, status, time_in, time_out
+        from public.visitors
+        where status = 'Approved'
+          and visit_date = %s
+        order by visit_time asc
     """, (today_ph,))
-
-    rows = cursor.fetchall()
-    conn.close()
 
     visitors = []
     for r in rows:
         visitors.append({
-            "id": r[0],
-            "name": r[1],
-            "reason": r[2],
-            "department": r[3],
-            "person_to_visit": r[4],
-            "visit_date": r[5],
-            "visit_time": r[6],
-            "email": r[7],
-            "status": r[8],
-            "time_in": r[9],
-            "time_out": r[10]
+            "id": r["id"],
+            "name": r["name"],
+            "reason": r["reason"],
+            "department": r["department"],
+            "person_to_visit": r["person_to_visit"],
+            "visit_date": str(r["visit_date"]),   # date -> string
+            "visit_time": str(r["visit_time"]),   # time -> string
+            "email": r["email"],
+            "status": r["status"],
+            "time_in": r["time_in"].isoformat() if r["time_in"] else None,
+            "time_out": r["time_out"].isoformat() if r["time_out"] else None
         })
 
     return jsonify({
         "success": True,
         "visitors": visitors,
-        "server_today_ph": today_ph,   # helpful debug
+        "server_today_ph": today_ph,
         "count": len(visitors)
     })
 
