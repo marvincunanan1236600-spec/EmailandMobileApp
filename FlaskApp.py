@@ -1509,6 +1509,10 @@ def api_get_notifications():
     role = request.args.get("role")
     department = request.args.get("department")
 
+    # treat "" as null
+    if department is not None and department.strip() == "":
+        department = None
+
     if not role:
         return jsonify({"success": False, "message": "Missing role"}), 400
 
@@ -1534,19 +1538,25 @@ def api_get_notifications():
     unread_count = 0
 
     for r in rows:
-        is_read = bool(r["is_read"])
+        # safe is_read
+        ir = r.get("is_read")
+        is_read = bool(ir) if ir is not None else False
         if not is_read:
             unread_count += 1
 
+        # safe created_at (datetime OR string OR None)
+        ca = r.get("created_at")
+        created_at_str = ca.isoformat() if hasattr(ca, "isoformat") else (str(ca) if ca else None)
+
         notifications.append({
-            "id": r["id"],
-            "target_role": r["target_role"],
-            "target_department": r["target_department"],
-            "title": r["title"],
-            "body": r["body"],
-            "type": r["type"],
-            "visitor_id": r["visitor_id"],
-            "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+            "id": r.get("id"),
+            "target_role": r.get("target_role"),
+            "target_department": r.get("target_department"),
+            "title": r.get("title"),
+            "body": r.get("body"),
+            "type": r.get("type"),
+            "visitor_id": r.get("visitor_id"),
+            "created_at": created_at_str,
             "is_read": 1 if is_read else 0
         })
 
