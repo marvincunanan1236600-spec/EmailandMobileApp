@@ -1517,6 +1517,14 @@ def api_mark_all_read():
 
     return jsonify({"success": True})
 
+@app.get("/api/health/db")
+def health_db():
+    try:
+        row = fetchone("select now() as now")
+        return jsonify(success=True, now=str(row["now"]))
+    except Exception as e:
+        return jsonify(success=False, error=str(e)), 500
+
 
 # Run Flask
 if __name__ == "__main__":
