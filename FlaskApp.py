@@ -343,8 +343,10 @@ def get_visitor_brief(visitor_id: int):
             name,
             department,
             person_to_visit,
+            reason,
             visit_date,
-            visit_time
+            visit_time,
+            decision_note
         from public.visitors
         where id = %s
     """, (visitor_id,))
@@ -356,9 +358,43 @@ def get_visitor_brief(visitor_id: int):
         "name": row["name"],
         "department": row["department"],
         "person_to_visit": row["person_to_visit"],
-        "visit_date": str(row["visit_date"]),   # date -> string
-        "visit_time": str(row["visit_time"]),   # time -> string
+        "reason": row["reason"],
+        "visit_date": str(row["visit_date"]),
+        "visit_time": str(row["visit_time"]),
+        "decision_note": row["decision_note"],
     }
+
+
+# Used when we already have visitor info from DB
+def build_notif_body(brief: dict) -> str:
+    note = (brief.get("decision_note") or "").strip()
+    note_line = f"\nNote: {note}" if note else ""
+
+    return (
+        f"{brief['name']} → {brief['person_to_visit']}\n"
+        f"Reason: {brief['reason']}\n"
+        f"Time and date of visit: {brief['visit_date']} {brief['visit_time']}"
+        f"{note_line}"
+    )
+
+# Used when visitor info comes from form/session (Pending)
+def build_notif_body_from_fields(
+    name: str,
+    person_to_visit: str,
+    reason: str,
+    visit_date: str,
+    visit_time: str,
+    note=None
+) -> str:
+    note = (note or "").strip()
+    note_line = f"\nNote: {note}" if note else ""
+
+    return (
+        f"{name} → {person_to_visit}\n"
+        f"Reason: {reason}\n"
+        f"Time and date of visit: {visit_date} {visit_time}"
+        f"{note_line}"
+    )
 
 
 # ---------------- ROUTES ----------------
@@ -550,7 +586,14 @@ def verify_otp():
         add_notification(
             target_role="admin",
             title="New Appointment Request",
-            body=f"{visitor_info['name']} submitted an appointment for {visitor_info['visit_date']} {visitor_info['visit_time']}.",
+            body=build_notif_body_from_fields(
+                name=visitor_info["name"],
+                person_to_visit=visitor_info["person_to_visit"],
+                reason=visitor_info["reason"],
+                visit_date=visitor_info["visit_date"],
+                visit_time=visitor_info["visit_time"],
+                note=None  # Pending has no decision note yet
+            ),
             type_="PENDING",
             visitor_id=visitor_id
         )
@@ -751,6 +794,7 @@ def approve_visitor(visitor_id):
     decided_by = session.get("admin", "admin")
     decided_at = datetime.now(ZoneInfo("Asia/Manila"))
 
+    # 1) Update visitor decision
     execute("""
         update public.visitors
         set status='Approved',
@@ -759,33 +803,36 @@ def approve_visitor(visitor_id):
         where id=%s
     """, (decided_by, decided_at, visitor_id))
 
-    # Clean old decision notifications
+    # 2) Delete old decision notifications BEFORE inserting new ones
     execute("""
         delete from public.notifications
         where visitor_id = %s
           and type in ('APPROVED', 'DECLINED')
     """, (visitor_id,))
 
-    # Notify guard + dep_head
+    # 3) Fetch details once
     brief = get_visitor_brief(visitor_id)
+
+    # 4) Add new notifications (with full details)
     if brief:
         add_notification(
             target_role="guard",
             title="Visitor Approved",
-            body=f"{brief['name']} ({brief['department']}) approved for {brief['visit_date']} {brief['visit_time']}.",
-            type_="APPROVED",
-            visitor_id=visitor_id
-        )
-        add_notification(
-            target_role="dep_head",
-            target_department=brief["department"],
-            title="Visitor Approved",
-            body=f"{brief['name']} approved. Visiting {brief['person_to_visit']}.",
+            body=build_notif_body(brief),
             type_="APPROVED",
             visitor_id=visitor_id
         )
 
-    # Email QR link
+        add_notification(
+            target_role="dep_head",
+            target_department=brief["department"],
+            title="Visitor Approved",
+            body=build_notif_body(brief),
+            type_="APPROVED",
+            visitor_id=visitor_id
+        )
+
+    # 5) Email QR link
     row = fetchone("select email from public.visitors where id=%s", (visitor_id,))
     if row:
         email = row["email"]
@@ -809,6 +856,7 @@ def approve_visitor(visitor_id):
 
     return redirect('/admin/dashboard')
 
+
 @app.route('/admin/decline/<int:visitor_id>')
 def decline_visitor(visitor_id):
     if 'admin' not in session:
@@ -817,6 +865,7 @@ def decline_visitor(visitor_id):
     decided_by = session.get("admin", "admin")
     decided_at = datetime.now(ZoneInfo("Asia/Manila"))
 
+    # 1) Update decision
     execute("""
         update public.visitors
         set status='Declined',
@@ -825,39 +874,53 @@ def decline_visitor(visitor_id):
         where id=%s
     """, (decided_by, decided_at, visitor_id))
 
+    # 2) Delete old decision notifications first
     execute("""
         delete from public.notifications
         where visitor_id = %s
           and type in ('APPROVED', 'DECLINED')
     """, (visitor_id,))
 
+    # 3) Fetch details once
     brief = get_visitor_brief(visitor_id)
+
+    # 4) Add new notifications with FULL details
     if brief:
         add_notification(
             target_role="guard",
             title="Visitor Declined",
-            body=f"{brief['name']} ({brief['department']}) was declined.",
-            type_="DECLINED",
-            visitor_id=visitor_id
-        )
-        add_notification(
-            target_role="dep_head",
-            target_department=brief["department"],
-            title="Visitor Declined",
-            body=f"{brief['name']} was declined.",
+            body=build_notif_body(brief),
             type_="DECLINED",
             visitor_id=visitor_id
         )
 
+        add_notification(
+            target_role="dep_head",
+            target_department=brief["department"],
+            title="Visitor Declined",
+            body=build_notif_body(brief),
+            type_="DECLINED",
+            visitor_id=visitor_id
+        )
+
+    # 5) Email visitor (optional: include note if you want)
     row = fetchone("select email from public.visitors where id=%s", (visitor_id,))
     if row:
         email = row["email"]
+
+        note = (brief.get("decision_note") or "").strip() if brief else ""
+        note_html = f"<p><b>Note:</b> {note}</p>" if note else ""
+
         message = Mail(
             from_email=EMAIL_ADDRESS,
             to_emails=email,
             subject="Visit Declined - La Concepcion College",
-            html_content="<p>We are sorry, your visit request was <b>declined</b>.</p>"
+            html_content=f"""
+                <p>We are sorry, your visit request was <b>declined</b>.</p>
+                {note_html}
+            """
         )
+
         try:
             sg = SendGridAPIClient(SENDGRID_API_KEY)
             sg.send(message)
