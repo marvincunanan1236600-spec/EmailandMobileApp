@@ -1508,37 +1508,6 @@ def api_mark_all_read():
     return jsonify({"success": True})
 
 
-@app.route("/api/notifications/read_all", methods=["POST"])
-def api_mark_all_read():
-    data = request.get_json(silent=True) or {}
-    role = data.get("role")
-    department = data.get("department")
-
-    if not role:
-        return jsonify({"success": False, "message": "Missing role"}), 400
-
-    conn = sqlite3.connect("visitors.db")
-    cursor = conn.cursor()
-
-    if role == "dep_head" and department:
-        cursor.execute("""
-            UPDATE notifications
-            SET is_read=1
-            WHERE target_role=?
-              AND (target_department=? OR target_department IS NULL)
-        """, (role, department))
-    else:
-        cursor.execute("""
-            UPDATE notifications
-            SET is_read=1
-            WHERE target_role=?
-        """, (role,))
-
-    conn.commit()
-    conn.close()
-
-    return jsonify({"success": True})
-
 @app.get("/api/health/db")
 def health_db():
     try:
