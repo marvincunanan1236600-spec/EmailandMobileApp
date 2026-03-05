@@ -895,7 +895,7 @@ def api_login():
         return jsonify({"success": False, "message": "Missing username or password"}), 400
 
     row = fetchone(
-        "select role, department from admin where username=%s and password=%s",
+        "select role, department from public.admin_accounts where username=%s and password=%s",
         (username, password)
     )
 
