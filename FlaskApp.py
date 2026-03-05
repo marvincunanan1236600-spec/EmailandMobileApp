@@ -794,7 +794,6 @@ def approve_visitor(visitor_id):
     decided_by = session.get("admin", "admin")
     decided_at = datetime.now(ZoneInfo("Asia/Manila"))
 
-    # 1) Update visitor decision
     execute("""
         update public.visitors
         set status='Approved',
@@ -803,17 +802,15 @@ def approve_visitor(visitor_id):
         where id=%s
     """, (decided_by, decided_at, visitor_id))
 
-    # 2) Delete old decision notifications BEFORE inserting new ones
+    # ✅ delete old APPROVED/DECLINED notifications FIRST
     execute("""
         delete from public.notifications
         where visitor_id = %s
           and type in ('APPROVED', 'DECLINED')
     """, (visitor_id,))
 
-    # 3) Fetch details once
+    # ✅ create NEW notifications with full details
     brief = get_visitor_brief(visitor_id)
-
-    # 4) Add new notifications (with full details)
     if brief:
         add_notification(
             target_role="guard",
@@ -832,12 +829,11 @@ def approve_visitor(visitor_id):
             visitor_id=visitor_id
         )
 
-    # 5) Email QR link
+    # Email QR link (same as yours)
     row = fetchone("select email from public.visitors where id=%s", (visitor_id,))
     if row:
         email = row["email"]
         qr_link = f"https://emailandmobileapp.onrender.com/generate_qr/{visitor_id}"
-
         message = Mail(
             from_email=EMAIL_ADDRESS,
             to_emails=email,
@@ -849,8 +845,7 @@ def approve_visitor(visitor_id):
             """
         )
         try:
-            sg = SendGridAPIClient(SENDGRID_API_KEY)
-            sg.send(message)
+            SendGridAPIClient(SENDGRID_API_KEY).send(message)
         except Exception as e:
             print("Approval email failed:", e)
 
@@ -865,7 +860,6 @@ def decline_visitor(visitor_id):
     decided_by = session.get("admin", "admin")
     decided_at = datetime.now(ZoneInfo("Asia/Manila"))
 
-    # 1) Update decision
     execute("""
         update public.visitors
         set status='Declined',
@@ -874,17 +868,13 @@ def decline_visitor(visitor_id):
         where id=%s
     """, (decided_by, decided_at, visitor_id))
 
-    # 2) Delete old decision notifications first
     execute("""
         delete from public.notifications
         where visitor_id = %s
           and type in ('APPROVED', 'DECLINED')
     """, (visitor_id,))
 
-    # 3) Fetch details once
     brief = get_visitor_brief(visitor_id)
-
-    # 4) Add new notifications with FULL details
     if brief:
         add_notification(
             target_role="guard",
@@ -903,27 +893,18 @@ def decline_visitor(visitor_id):
             visitor_id=visitor_id
         )
 
-    # 5) Email visitor (optional: include note if you want)
+    # email (same as yours)
     row = fetchone("select email from public.visitors where id=%s", (visitor_id,))
     if row:
         email = row["email"]
-
-        note = (brief.get("decision_note") or "").strip() if brief else ""
-        note_html = f"<p><b>Note:</b> {note}</p>" if note else ""
-
         message = Mail(
             from_email=EMAIL_ADDRESS,
             to_emails=email,
             subject="Visit Declined - La Concepcion College",
-            html_content=f"""
-                <p>We are sorry, your visit request was <b>declined</b>.</p>
-                {note_html}
-            """
+            html_content="<p>We are sorry, your visit request was <b>declined</b>.</p>"
         )
-
         try:
-            sg = SendGridAPIClient(SENDGRID_API_KEY)
-            sg.send(message)
+            SendGridAPIClient(SENDGRID_API_KEY).send(message)
         except Exception as e:
             print("Decline email failed:", e)
 
