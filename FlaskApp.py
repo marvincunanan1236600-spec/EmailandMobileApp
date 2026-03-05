@@ -6,6 +6,8 @@ from datetime import datetime, timedelta
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 from zoneinfo import ZoneInfo
+from flask import jsonify, request
+from db import fetchone
 
 app = Flask(__name__)
 app.secret_key = 'supersecretkey'
@@ -881,6 +883,7 @@ def toggle_test_mode():
 
     return redirect('/admin/dashboard')
 
+
 @app.route('/api/login', methods=['POST'])
 def api_login():
     data = request.get_json(silent=True) or {}
@@ -889,34 +892,21 @@ def api_login():
     password = data.get('password')
 
     if not username or not password:
-        return jsonify({
-            "success": False,
-            "message": "Missing username or password"
-        }), 400
+        return jsonify({"success": False, "message": "Missing username or password"}), 400
 
-    conn = sqlite3.connect('admin.db')
-    cursor = conn.cursor()
-
-    # role + department
-    cursor.execute(
-        "SELECT role, department FROM admin WHERE username=? AND password=?",
+    row = fetchone(
+        "select role, department from admin where username=%s and password=%s",
         (username, password)
     )
-    row = cursor.fetchone()
-    conn.close()
 
     if row:
-        role, department = row[0], row[1]
         return jsonify({
             "success": True,
-            "role": role,
-            "department": department  # will be null for admin/guard
+            "role": row["role"],
+            "department": row["department"]
         })
 
-    return jsonify({
-        "success": False,
-        "message": "Invalid credentials"
-    }), 401
+    return jsonify({"success": False, "message": "Invalid credentials"}), 401
 
 
 @app.route('/api/admin/visitors', methods=['GET'])
