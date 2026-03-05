@@ -510,7 +510,7 @@ def send_verification():
 # Verify OTP
 @app.route('/verify_otp', methods=['POST'])
 def verify_otp():
-    entered_otp = request.form['otp']
+    entered_otp = request.form.get('otp', '').strip()
     stored_otp = session.get('otp')
     otp_timestamp = session.get('otp_timestamp')
 
@@ -518,68 +518,56 @@ def verify_otp():
     if not stored_otp:
         return render_template('Error.html', message="❌ OTP session expired. Please request a new code.")
 
-    # Check if OTP is expired (10 minutes)
+    # Check expiry (10 minutes)
     if otp_timestamp:
         elapsed_time = datetime.now().timestamp() - otp_timestamp
         if elapsed_time > 600:
             return render_template('Error.html', message="❌ OTP has expired. Please request a new code.")
 
-    if entered_otp == stored_otp:
+    if entered_otp != stored_otp:
+        return render_template('Error.html', message="❌ Invalid OTP. Please try again or request a new code.")
 
-        visitor_info = session.get('visitor_info')
-        filename = session.get('valid_id_filename')
+    visitor_info = session.get('visitor_info')
+    filename = session.get('valid_id_filename')
 
-        conn = sqlite3.connect('visitors.db')
-        cursor = conn.cursor()
+    if not visitor_info:
+        return render_template('Error.html', message="❌ Session expired. Please submit the appointment form again.")
 
-        # Mark email verified (optional but fine)
-        cursor.execute("UPDATE visitors SET is_verified=1 WHERE email=?", (visitor_info['email'],))
-
-        # Insert visitor
-        cursor.execute('''
-            INSERT INTO visitors 
-            (name, reason, person_to_visit, department, visit_date, visit_time, email, valid_id, created_at, is_verified, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (
+    try:
+        # ✅ Insert into SUPABASE (public.visitors) and get the new ID
+        row = fetchone("""
+            insert into public.visitors
+                (name, reason, person_to_visit, department,
+                 visit_date, visit_time, email, valid_id,
+                 status, is_verified)
+            values
+                (%s, %s, %s, %s,
+                 %s, %s, %s, %s,
+                 'Pending', true)
+            returning id
+        """, (
             visitor_info['name'],
             visitor_info['reason'],
             visitor_info['person_to_visit'],
             visitor_info['department'],
-            visitor_info['visit_date'],
-            visitor_info['visit_time'],
+            visitor_info['visit_date'],   # 'YYYY-MM-DD' ok
+            visitor_info['visit_time'],   # 'HH:MM' ok
             visitor_info['email'],
-            filename,
-            datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            1,
-            'Pending'
+            filename
         ))
 
-        # ✅ NOW cursor exists and INSERT is done
-        visitor_id = cursor.lastrowid
-        session["visitor_id"] = visitor_id
+        visitor_id = row["id"]
+        session["visitor_id"] = int(visitor_id)
+        session["verified_email"] = visitor_info["email"]
 
-        conn.commit()
-        conn.close()
-
-        # ✅ NEW: Notifications (admin + department head)
+        # ✅ Optional: notify admin that there is a new pending appointment
         add_notification(
             target_role="admin",
             title="New Appointment Request",
-            body=f"{visitor_info['name']} requested a visit to {visitor_info['person_to_visit']} ({visitor_info['department']}).",
-            type_="NEW_PENDING",
+            body=f"{visitor_info['name']} submitted an appointment for {visitor_info['visit_date']} {visitor_info['visit_time']}.",
+            type_="PENDING",
             visitor_id=visitor_id
         )
-
-        add_notification(
-            target_role="dep_head",
-            target_department=visitor_info["department"],
-            title="New Pending Visitor",
-            body=f"{visitor_info['name']} is requesting to visit {visitor_info['person_to_visit']}.",
-            type_="NEW_PENDING",
-            visitor_id=visitor_id
-        )
-
-        session['verified_email'] = visitor_info['email']
 
         # Clear OTP
         session.pop('otp', None)
@@ -587,8 +575,9 @@ def verify_otp():
 
         return render_template('pending_approval.html')
 
-    else:
-        return render_template('Error.html', message="❌ Invalid OTP. Please try again or request a new code.")
+    except Exception as e:
+        print("verify_otp error:", e)
+        return render_template('Error.html', message="❌ Server error. Please try again.")
 
 
 # QR Generation
