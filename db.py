@@ -1,27 +1,27 @@
 import os
-import psycopg2
-from psycopg2.extras import RealDictCursor
+import psycopg
+from psycopg.rows import dict_row
 
 def get_conn():
     url = os.environ.get("DATABASE_URL")
     if not url:
         raise RuntimeError("DATABASE_URL is not set")
 
-    # Supabase Postgres requires SSL
+    # Supabase needs SSL
     if "sslmode=" not in url:
         url += "?sslmode=require"
 
-    return psycopg2.connect(url)
+    return psycopg.connect(url, row_factory=dict_row)
 
 def fetchone(query, params=()):
     with get_conn() as conn:
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        with conn.cursor() as cur:
             cur.execute(query, params)
             return cur.fetchone()
 
 def fetchall(query, params=()):
     with get_conn() as conn:
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        with conn.cursor() as cur:
             cur.execute(query, params)
             return cur.fetchall()
 
