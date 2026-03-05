@@ -477,7 +477,7 @@ def send_verification():
         cursor = conn.cursor()
         cursor.execute('''
             INSERT INTO visitors (name, reason, person_to_visit, department, visit_date, visit_time, email, valid_id, created_at, is_verified)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             name,
             session['visitor_info']['reason'],
@@ -609,25 +609,48 @@ def generate_qr_form():
 
 @app.route('/generate_qr/<int:visitor_id>')
 def generate_qr_by_id(visitor_id):
-    conn = sqlite3.connect('visitors.db')
-    cursor = conn.cursor()
-    cursor.execute("SELECT name, reason, person_to_visit, department, visit_date, visit_time, email, valid_id FROM visitors WHERE id=?", (visitor_id,))
-    visitor = cursor.fetchone()
-    conn.close()
+    # 1) Try Supabase/Postgres first
+    row = fetchone("""
+        select name, reason, person_to_visit, department, visit_date, visit_time, email, valid_id
+        from public.visitors
+        where id = %s
+    """, (visitor_id,))
 
-    if not visitor:
-        return "❌ Visitor not found", 404
+    if row:
+        visitor_info = {
+            "name": row["name"],
+            "reason": row["reason"],
+            "person_to_visit": row["person_to_visit"],
+            "department": row["department"],
+            "visit_date": str(row["visit_date"]),
+            "visit_time": str(row["visit_time"]),
+            "email": row["email"]
+        }
+        filename = row["valid_id"]
+    else:
+        # 2) Optional fallback to old SQLite data
+        conn = sqlite3.connect('visitors.db')
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT name, reason, person_to_visit, department, visit_date, visit_time, email, valid_id
+            FROM visitors WHERE id=?
+        """, (visitor_id,))
+        visitor = cursor.fetchone()
+        conn.close()
 
-    visitor_info = {
-        'name': visitor[0],
-        'reason': visitor[1],
-        'person_to_visit': visitor[2],
-        'department': visitor[3],
-        'visit_date': visitor[4],
-        'visit_time': visitor[5],
-        'email': visitor[6]
-    }
-    filename = visitor[7]
+        if not visitor:
+            return "❌ Visitor not found", 404
+
+        visitor_info = {
+            "name": visitor[0],
+            "reason": visitor[1],
+            "person_to_visit": visitor[2],
+            "department": visitor[3],
+            "visit_date": visitor[4],
+            "visit_time": visitor[5],
+            "email": visitor[6],
+        }
+        filename = visitor[7]
 
     qr_link = f"https://emailandmobileapp.onrender.com/generate_qr/{visitor_id}"
 
@@ -1409,79 +1432,81 @@ def api_guard_today():
 @app.route("/api/notifications", methods=["GET"])
 def api_get_notifications():
     role = request.args.get("role")
-    department = request.args.get("department")  # optional
+    department = request.args.get("department")
 
     if not role:
         return jsonify({"success": False, "message": "Missing role"}), 400
 
-    conn = sqlite3.connect("visitors.db")
-    cursor = conn.cursor()
-
-    # dep_head can be filtered by department
-    if role == "dep_head" and department:
-        cursor.execute("""
-            SELECT id, target_role, target_department, title, body, type, visitor_id, created_at, is_read
-            FROM notifications
-            WHERE target_role=?
-              AND (target_department=? OR target_department IS NULL)
-            ORDER BY id DESC
-            LIMIT 100
-        """, (role, department))
+    if role == "dep_head":
+        rows = fetchall("""
+            select id, target_role, target_department, title, body, type, visitor_id, created_at, is_read
+            from public.notifications
+            where target_role = %s
+              and (%s is null or target_department = %s or target_department is null)
+            order by id desc
+            limit 100
+        """, (role, department, department))
     else:
-        cursor.execute("""
-            SELECT id, target_role, target_department, title, body, type, visitor_id, created_at, is_read
-            FROM notifications
-            WHERE target_role=?
-            ORDER BY id DESC
-            LIMIT 100
+        rows = fetchall("""
+            select id, target_role, target_department, title, body, type, visitor_id, created_at, is_read
+            from public.notifications
+            where target_role = %s
+            order by id desc
+            limit 100
         """, (role,))
-
-    rows = cursor.fetchall()
-    conn.close()
 
     notifications = []
     unread_count = 0
 
     for r in rows:
-        is_read = int(r[8]) if r[8] is not None else 0
-        if is_read == 0:
+        is_read = bool(r["is_read"])
+        if not is_read:
             unread_count += 1
 
         notifications.append({
-            "id": r[0],
-            "target_role": r[1],
-            "target_department": r[2],
-            "title": r[3],
-            "body": r[4],
-            "type": r[5],
-            "visitor_id": r[6],
-            "created_at": r[7],
-            "is_read": is_read
+            "id": r["id"],
+            "target_role": r["target_role"],
+            "target_department": r["target_department"],
+            "title": r["title"],
+            "body": r["body"],
+            "type": r["type"],
+            "visitor_id": r["visitor_id"],
+            "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+            "is_read": 1 if is_read else 0
         })
 
-    return jsonify({
-        "success": True,
-        "notifications": notifications,
-        "unread_count": unread_count
-    })
+    return jsonify({"success": True, "notifications": notifications, "unread_count": unread_count})
 
 @app.route("/api/notifications/read/<int:notif_id>", methods=["POST"])
 def api_mark_notification_read(notif_id):
-    conn = sqlite3.connect("visitors.db")
-    cursor = conn.cursor()
+    execute("update public.notifications set is_read = true where id = %s", (notif_id,))
+    return jsonify({"success": True})
 
-    cursor.execute("UPDATE notifications SET is_read=1 WHERE id=?", (notif_id,))
-    conn.commit()
+@app.route("/api/notifications/read_all", methods=["POST"])
+def api_mark_all_read():
+    data = request.get_json(silent=True) or {}
+    role = data.get("role")
+    department = data.get("department")
 
-    cursor.execute("SELECT changes()")
-    changed = cursor.fetchone()[0]
+    if not role:
+        return jsonify({"success": False, "message": "Missing role"}), 400
 
-    conn.close()
-
-    if changed == 0:
-        return jsonify({"success": False, "message": "Notification not found"}), 404
+    if role == "dep_head" and department:
+        execute("""
+            update public.notifications
+            set is_read = true
+            where target_role = %s
+              and (target_department = %s or target_department is null)
+        """, (role, department))
+    else:
+        execute("""
+            update public.notifications
+            set is_read = true
+            where target_role = %s
+        """, (role,))
 
     return jsonify({"success": True})
+
 
 @app.route("/api/notifications/read_all", methods=["POST"])
 def api_mark_all_read():
