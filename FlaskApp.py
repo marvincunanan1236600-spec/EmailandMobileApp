@@ -312,12 +312,21 @@ def is_test_mode():
     return row and row[0] == "1"
 
 
-def add_notification(target_role, title, body, type_, visitor_id=None, target_department=None):
-    conn = sqlite3.connect("visitors.db")
-    cursor = conn.cursor()
-    cursor.execute("""
-        INSERT INTO notifications (target_role, target_department, title, body, type, visitor_id, created_at, is_read)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 0)
+def add_notification(
+    target_role,
+    title,
+    body,
+    type_,
+    visitor_id=None,
+    target_department=None
+):
+    created_at = datetime.now(ZoneInfo("Asia/Manila"))  # timestamptz
+
+    execute("""
+        insert into public.notifications
+            (target_role, target_department, title, body, type, visitor_id, created_at, is_read)
+        values
+            (%s, %s, %s, %s, %s, %s, %s, false)
     """, (
         target_role,
         target_department,
@@ -325,33 +334,30 @@ def add_notification(target_role, title, body, type_, visitor_id=None, target_de
         body,
         type_,
         visitor_id,
-        datetime.now(ZoneInfo("Asia/Manila")).strftime("%Y-%m-%d %H:%M:%S")
+        created_at
     ))
-    conn.commit()
-    conn.close()
 
 def get_visitor_brief(visitor_id: int):
-    conn = sqlite3.connect("visitors.db")
-    cursor = conn.cursor()
-
-    cursor.execute("""
-        SELECT name, department, person_to_visit, visit_date, visit_time
-        FROM visitors
-        WHERE id=?
+    row = fetchone("""
+        select
+            name,
+            department,
+            person_to_visit,
+            visit_date,
+            visit_time
+        from public.visitors
+        where id = %s
     """, (visitor_id,))
-
-    row = cursor.fetchone()
-    conn.close()
 
     if not row:
         return None
 
     return {
-        "name": row[0],
-        "department": row[1],
-        "person_to_visit": row[2],
-        "visit_date": row[3],
-        "visit_time": row[4],
+        "name": row["name"],
+        "department": row["department"],
+        "person_to_visit": row["person_to_visit"],
+        "visit_date": str(row["visit_date"]),   # date -> string
+        "visit_time": str(row["visit_time"]),   # time -> string
     }
 
 
@@ -955,36 +961,29 @@ def api_admin_visitors():
 def api_admin_approve(visitor_id):
     try:
         data = request.get_json(silent=True) or {}
-        note = (data.get("note") or "").strip()
+        note = (data.get("note") or "").strip() or None
 
         decided_by = "admin"  # later: from auth token/session
-        decided_at = datetime.now(ZoneInfo("Asia/Manila")).strftime("%Y-%m-%d %H:%M:%S")
+        decided_at = datetime.now(ZoneInfo("Asia/Manila"))  # timestamptz-friendly
 
-        conn = sqlite3.connect('visitors.db')
-        cursor = conn.cursor()
+        # 1) Update visitor decision (Postgres)
+        execute("""
+            update public.visitors
+            set status = 'Approved',
+                decision_note = %s,
+                decided_by = %s,
+                decided_at = %s
+            where id = %s
+        """, (note, decided_by, decided_at, visitor_id))
 
-        # Update visitor decision
-        cursor.execute("""
-            UPDATE visitors
-            SET status='Approved',
-                decision_note=?,
-                decided_by=?,
-                decided_at=?
-            WHERE id=?
-        """, (note if note else None, decided_by, decided_at, visitor_id))
-        conn.commit()
-
-        # Remove old decision notifications for this visitor (guard + dep_head)
-        cursor.execute("""
-            DELETE FROM notifications
-            WHERE visitor_id=?
-              AND type IN ('APPROVED','DECLINED')
+        # 2) Remove old decision notifications for this visitor (Postgres)
+        execute("""
+            delete from public.notifications
+            where visitor_id = %s
+              and type in ('APPROVED', 'DECLINED')
         """, (visitor_id,))
-        conn.commit()
 
-        conn.close()
-
-        # Create APPROVED notifications
+        # 3) Create APPROVED notifications (your helpers)
         brief = get_visitor_brief(visitor_id)
         if brief:
             add_notification(
@@ -1004,17 +1003,14 @@ def api_admin_approve(visitor_id):
                 visitor_id=visitor_id
             )
 
-        # Email
-        conn = sqlite3.connect('visitors.db')
-        cursor = conn.cursor()
-        cursor.execute("SELECT email FROM visitors WHERE id=?", (visitor_id,))
-        row = cursor.fetchone()
-        conn.close()
-
+        # 4) Get email from Postgres
+        row = fetchone("select email from public.visitors where id = %s", (visitor_id,))
         if not row:
             return jsonify({"success": False, "message": "Visitor not found"}), 404
 
-        email = row[0]
+        email = row["email"]
+
+        # 5) Email approved QR link
         qr_link = f"https://emailandmobileapp.onrender.com/generate_qr/{visitor_id}"
 
         message = Mail(
@@ -1047,47 +1043,45 @@ def api_admin_decline(visitor_id):
         data = request.get_json(silent=True) or {}
         note = (data.get("note") or "").strip()
 
-        decided_by = "admin"  # later from token
-        decided_at = datetime.now(ZoneInfo("Asia/Manila")).strftime("%Y-%m-%d %H:%M:%S")
+        decided_by = "admin"  # later from auth token/session
+        decided_at = datetime.now(ZoneInfo("Asia/Manila"))  # timestamptz
 
-        conn = sqlite3.connect('visitors.db')
-        cursor = conn.cursor()
-
-        # Update visitor decision
-        cursor.execute("""
-            UPDATE visitors
-            SET status='Declined',
-                decision_note=?,
-                decided_by=?,
-                decided_at=?
-            WHERE id=?
+        # 1) Update visitor decision
+        execute("""
+            update public.visitors
+            set
+                status = 'Declined',
+                decision_note = %s,
+                decided_by = %s,
+                decided_at = %s
+            where id = %s
         """, (
             note if note else None,
             decided_by,
             decided_at,
             visitor_id
         ))
-        conn.commit()
 
-        # ✅ Remove old decision notifications for this visitor (so we don't show both)
-        cursor.execute("""
-            DELETE FROM notifications
-            WHERE visitor_id=?
-              AND type IN ('APPROVED','DECLINED')
+        # 2) Remove old decision notifications for this visitor
+        execute("""
+            delete from public.notifications
+            where visitor_id = %s
+              and type in ('APPROVED','DECLINED')
         """, (visitor_id,))
-        conn.commit()
 
-        # Get email
-        cursor.execute("SELECT email FROM visitors WHERE id=?", (visitor_id,))
-        row = cursor.fetchone()
-        conn.close()
+        # 3) Get email
+        row = fetchone("""
+            select email
+            from public.visitors
+            where id = %s
+        """, (visitor_id,))
 
         if not row:
             return jsonify({"success": False, "message": "Visitor not found"}), 404
 
-        email = row[0]
+        email = row["email"]
 
-        # ✅ Create DECLINED notifications
+        # 4) Create DECLINED notifications
         brief = get_visitor_brief(visitor_id)
         if brief:
             add_notification(
@@ -1107,7 +1101,7 @@ def api_admin_decline(visitor_id):
                 visitor_id=visitor_id
             )
 
-        # Email (include note)
+        # 5) Email (include note)
         note_html = f"<p><b>Reason / Note:</b> {note}</p>" if note else ""
 
         message = Mail(
@@ -1275,45 +1269,45 @@ def api_dep_visitors():
 
 @app.route('/api/guard/visitor/<int:visitor_id>', methods=['GET'])
 def api_guard_get_visitor(visitor_id):
-    conn = sqlite3.connect('visitors.db')
-    cursor = conn.cursor()
-
-    cursor.execute("""
-        SELECT id, name, reason, person_to_visit, department,
-       visit_date, visit_time, email, valid_id,
-       time_in, time_out, status, created_at,
-       decision_note, decided_by, decided_at
-        FROM visitors
-        WHERE id=?
+    row = fetchone("""
+        select
+            id, name, reason, person_to_visit, department,
+            visit_date, visit_time, email, valid_id,
+            time_in, time_out, status, created_at,
+            decision_note, decided_by, decided_at
+        from public.visitors
+        where id = %s
     """, (visitor_id,))
-
-    row = cursor.fetchone()
-    conn.close()
 
     if not row:
         return jsonify({"success": False, "message": "Visitor not found"}), 404
 
+    # Convert date/time/timestamptz safely to strings for Android
+    def s(x):
+        return x.isoformat() if hasattr(x, "isoformat") and x is not None else x
+
     return jsonify({
         "success": True,
         "visitor": {
-            "id": row[0],
-            "name": row[1],
-            "reason": row[2],
-            "person_to_visit": row[3],
-            "department": row[4],
-            "visit_date": row[5],
-            "visit_time": row[6],
-            "email": row[7],
-            "valid_id": row[8],
-            "time_in": row[9],
-            "time_out": row[10],
-            "status": row[11],
-            "created_at": row[12],
-            "decision_note": row[13],
-            "decided_by": row[14],
-            "decided_at": row[15],
+            "id": row["id"],
+            "name": row["name"],
+            "reason": row["reason"],
+            "person_to_visit": row["person_to_visit"],
+            "department": row["department"],
+            "visit_date": s(row["visit_date"]),       # date -> "YYYY-MM-DD"
+            "visit_time": s(row["visit_time"]),       # time -> "HH:MM:SS"
+            "email": row["email"],
+            "valid_id": row["valid_id"],
+            "time_in": s(row["time_in"]),             # timestamptz -> ISO string
+            "time_out": s(row["time_out"]),
+            "status": row["status"],
+            "created_at": s(row["created_at"]),
+            "decision_note": row["decision_note"],
+            "decided_by": row["decided_by"],
+            "decided_at": s(row["decided_at"]),
         }
     })
+
 @app.route('/api/guard/scan/<int:visitor_id>', methods=['POST'])
 def api_guard_scan(visitor_id):
     # 1) Read visitor
@@ -1388,7 +1382,7 @@ def api_guard_scan(visitor_id):
 
 @app.route("/api/guard/today", methods=["GET"])
 def api_guard_today():
-    today_ph = datetime.now(ZoneInfo("Asia/Manila")).date().isoformat()  # "YYYY-MM-DD"
+    today_ph = datetime.now(ZoneInfo("Asia/Manila")).date()
 
     rows = fetchall("""
         select
@@ -1408,8 +1402,8 @@ def api_guard_today():
             "reason": r["reason"],
             "department": r["department"],
             "person_to_visit": r["person_to_visit"],
-            "visit_date": str(r["visit_date"]),   # date -> string
-            "visit_time": str(r["visit_time"]),   # time -> string
+            "visit_date": str(r["visit_date"]),
+            "visit_time": str(r["visit_time"]),
             "email": r["email"],
             "status": r["status"],
             "time_in": r["time_in"].isoformat() if r["time_in"] else None,
@@ -1419,7 +1413,7 @@ def api_guard_today():
     return jsonify({
         "success": True,
         "visitors": visitors,
-        "server_today_ph": today_ph,
+        "server_today_ph": today_ph.isoformat(),
         "count": len(visitors)
     })
 
