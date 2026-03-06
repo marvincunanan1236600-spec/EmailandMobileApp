@@ -1170,10 +1170,12 @@ def api_admin_approve(visitor_id):
         # 3) Create APPROVED notifications (your helpers)
         brief = get_visitor_brief(visitor_id)
         if brief:
+            body_text = build_notif_body(brief)
+
             add_notification(
                 target_role="guard",
                 title="Visitor Approved",
-                body=f"{brief['name']} ({brief['department']}) approved for {brief['visit_date']} {brief['visit_time']}.",
+                body=body_text,
                 type_="APPROVED",
                 visitor_id=visitor_id
             )
@@ -1182,7 +1184,7 @@ def api_admin_approve(visitor_id):
                 target_role="dep_head",
                 target_department=brief["department"],
                 title="Visitor Approved",
-                body=f"{brief['name']} approved. Visiting {brief['person_to_visit']}.",
+                body=body_text,
                 type_="APPROVED",
                 visitor_id=visitor_id
             )
@@ -1268,10 +1270,12 @@ def api_admin_decline(visitor_id):
         # 4) Create DECLINED notifications
         brief = get_visitor_brief(visitor_id)
         if brief:
+            body_text = build_notif_body(brief)
+
             add_notification(
                 target_role="guard",
                 title="Visitor Declined",
-                body=f"{brief['name']} ({brief['department']}) was declined.",
+                body=body_text,
                 type_="DECLINED",
                 visitor_id=visitor_id
             )
@@ -1280,7 +1284,7 @@ def api_admin_decline(visitor_id):
                 target_role="dep_head",
                 target_department=brief["department"],
                 title="Visitor Declined",
-                body=f"{brief['name']} was declined.",
+                body=body_text,
                 type_="DECLINED",
                 visitor_id=visitor_id
             )
