@@ -216,7 +216,7 @@ tr:hover {
 
     <td>
     {% if visitor[8] %}
-        <a href="{{ url_for('uploaded_file', filename=visitor[8]) }}" target="_blank">View ID</a>
+        <a href="{{ url_for('view_id', file_path=visitor[8]) }}" target="_blank">View ID</a>
     {% else %}
         No ID
     {% endif %}

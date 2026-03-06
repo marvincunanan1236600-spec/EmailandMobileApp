@@ -8,6 +8,9 @@ from sendgrid.helpers.mail import Mail
 from zoneinfo import ZoneInfo
 from flask import jsonify, request
 from db import fetchone, fetchall, execute
+from supabase import create_client, Client
+import mimetypes
+import uuid
 
 app = Flask(__name__)
 app.secret_key = 'supersecretkey'
@@ -16,6 +19,12 @@ app.secret_key = 'supersecretkey'
 UPLOAD_FOLDER = os.path.join('static', 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY")  # use service role key on the server
+SUPABASE_BUCKET = "visitor-ids"
+
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
 # ---------------- DATABASES ----------------
@@ -396,6 +405,28 @@ def build_notif_body_from_fields(
         f"{note_line}"
     )
 
+def upload_id_to_supabase(file):
+    if not file or not file.filename:
+        return None
+
+    original_name = secure_filename(file.filename)
+    ext = os.path.splitext(original_name)[1].lower()
+    unique_name = f"{uuid.uuid4().hex}{ext}"
+    storage_path = f"valid_ids/{unique_name}"
+
+    content_type = file.mimetype or mimetypes.guess_type(original_name)[0] or "application/octet-stream"
+
+    file_bytes = file.read()
+    file.seek(0)
+
+    response = supabase.storage.from_(SUPABASE_BUCKET).upload(
+        storage_path,
+        file_bytes,
+        {"content-type": content_type}
+    )
+
+    return storage_path
+
 
 # ---------------- ROUTES ----------------
 
@@ -507,10 +538,12 @@ def send_verification():
     # Save uploaded ID filename (file is still stored on Render disk)
     file = request.files.get('valid_id')
     if file and file.filename:
-        filename = secure_filename(file.filename)
-        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        file.save(file_path)
-        session['valid_id_filename'] = filename
+        try:
+            storage_path = upload_id_to_supabase(file)
+            session['valid_id_filename'] = storage_path
+        except Exception as e:
+            print("Supabase ID upload error:", e)
+            return render_template("Error.html", message="❌ Failed to upload valid ID. Please try again.")
     else:
         session['valid_id_filename'] = None
 
@@ -708,6 +741,23 @@ def generate_qr_by_id(visitor_id):
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
+@app.route('/view-id/<path:file_path>')
+def view_id(file_path):
+    if 'admin' not in session:
+        return redirect('/admin/login')
+
+    try:
+        signed = supabase.storage.from_(SUPABASE_BUCKET).create_signed_url(file_path, 3600)
+        signed_url = signed.get("signedURL") or signed.get("signed_url")
+
+        if not signed_url:
+            return "❌ Could not generate signed URL", 404
+
+        return redirect(signed_url)
+    except Exception as e:
+        print("view_id error:", e)
+        return "❌ File not found", 404
 
 
 # ---------------- ADMIN ROUTES ----------------
