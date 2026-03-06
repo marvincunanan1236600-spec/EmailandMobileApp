@@ -1110,6 +1110,7 @@ def api_admin_visitors():
             visit_date,
             visit_time,
             email,
+            valid_id,
             status,
             created_at,
             decision_note,
@@ -1119,7 +1120,6 @@ def api_admin_visitors():
         order by id desc
     """)
 
-    # rows are dicts because you used row_factory=dict_row
     visitors = []
     for r in rows:
         visitors.append({
@@ -1131,6 +1131,7 @@ def api_admin_visitors():
             "visit_date": str(r["visit_date"]) if r["visit_date"] else None,
             "visit_time": str(r["visit_time"]) if r["visit_time"] else None,
             "email": r["email"],
+            "valid_id": r["valid_id"],   # ✅ added
             "status": r["status"],
             "created_at": r["created_at"].isoformat() if r["created_at"] else None,
             "decision_note": r["decision_note"],
