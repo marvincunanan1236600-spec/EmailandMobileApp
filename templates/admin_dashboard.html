@@ -215,12 +215,12 @@ tr:hover {
     <td>{{ visitor[7] }}</td>   <!-- email -->
 
     <td>
-        {% if visitor[8] %}
-            <a href="{{ url_for('static', filename='uploads/' ~ visitor[8]) }}" target="_blank">View ID</a>
-        {% else %}
-            No ID
-        {% endif %}
-    </td>
+    {% if visitor[8] %}
+        <a href="{{ url_for('uploaded_file', filename=visitor[8]) }}" target="_blank">View ID</a>
+    {% else %}
+        No ID
+    {% endif %}
+</td>
 
     <td>{{ visitor[11] }}</td>  <!-- status -->
     <td>{{ visitor[9] }}</td>   <!-- time_in -->
