@@ -428,6 +428,24 @@ def upload_id_to_supabase(file):
     return storage_path
 
 
+
+def build_guard_scan_body(brief: dict, action: str, actual_time: str) -> str:
+    if action == "TIME_IN":
+        first_line = f"{brief['name']} is already at the premises."
+        actual_line = f"Actual Arrival: {actual_time}"
+    else:
+        first_line = f"{brief['name']} has already left the premises."
+        actual_line = f"Actual Exit: {actual_time}"
+
+    return (
+        f"{first_line}\n"
+        f"Person to Visit: {brief['person_to_visit']}\n"
+        f"Reason: {brief['reason']}\n"
+        f"Scheduled Visit: {brief['visit_date']} {brief['visit_time']}\n"
+        f"{actual_line}"
+    )
+
+
 # ---------------- ROUTES ----------------
 
 # Homepage
@@ -1510,16 +1528,16 @@ def api_guard_scan(visitor_id):
 
     vid = row["id"]
     name = row["name"]
-    vdate = row["visit_date"]            # date
+    vdate = row["visit_date"]
     status = row["status"]
-    time_in = row["time_in"]             # timestamptz or None
-    time_out = row["time_out"]           # timestamptz or None
+    time_in = row["time_in"]
+    time_out = row["time_out"]
 
-    # ✅ Status must be Approved
+    # Status must be Approved
     if status != "Approved":
         return jsonify({"success": False, "message": f"Not allowed: status is {status}"}), 403
 
-    # ✅ Expiration check: compare visit_date to today (Manila)
+    # Appointment date must be today (Manila)
     today_ph = datetime.now(ZoneInfo("Asia/Manila")).date()
     if vdate != today_ph:
         return jsonify({
@@ -1527,16 +1545,38 @@ def api_guard_scan(visitor_id):
             "message": f"Not allowed: appointment date is {vdate}"
         }), 403
 
-    # ✅ Use a real timestamptz value (UTC-aware)
-    now_dt = datetime.now(ZoneInfo("Asia/Manila"))  # timezone-aware datetime
+    # Current actual scan time
+    now_dt = datetime.now(ZoneInfo("Asia/Manila"))
+    actual_time = now_dt.strftime("%Y-%m-%d %H:%M:%S")
 
-    # If no time_in yet → auto TIME IN
+    # If no time_in yet → TIME IN
     if time_in is None:
         execute("""
             update public.visitors
             set time_in = %s
             where id = %s
         """, (now_dt, vid))
+
+        brief = get_visitor_brief(vid)
+        if brief:
+            body_text = build_guard_scan_body(brief, "TIME_IN", actual_time)
+
+            add_notification(
+                target_role="admin",
+                title="Visitor Arrived",
+                body=body_text,
+                type_="TIME_IN",
+                visitor_id=vid
+            )
+
+            add_notification(
+                target_role="dep_head",
+                target_department=brief["department"],
+                title="Visitor Arrived",
+                body=body_text,
+                type_="TIME_IN",
+                visitor_id=vid
+            )
 
         return jsonify({
             "success": True,
@@ -1545,13 +1585,34 @@ def api_guard_scan(visitor_id):
             "time": now_dt.isoformat()
         })
 
-    # If time_in exists but no time_out yet → auto TIME OUT
+    # If time_in exists but no time_out yet → TIME OUT
     if time_in is not None and time_out is None:
         execute("""
             update public.visitors
             set time_out = %s
             where id = %s
         """, (now_dt, vid))
+
+        brief = get_visitor_brief(vid)
+        if brief:
+            body_text = build_guard_scan_body(brief, "TIME_OUT", actual_time)
+
+            add_notification(
+                target_role="admin",
+                title="Visitor Left",
+                body=body_text,
+                type_="TIME_OUT",
+                visitor_id=vid
+            )
+
+            add_notification(
+                target_role="dep_head",
+                target_department=brief["department"],
+                title="Visitor Left",
+                body=body_text,
+                type_="TIME_OUT",
+                visitor_id=vid
+            )
 
         return jsonify({
             "success": True,
@@ -1560,7 +1621,7 @@ def api_guard_scan(visitor_id):
             "time": now_dt.isoformat()
         })
 
-    # If both exist → already completed
+    # Already completed
     return jsonify({
         "success": False,
         "message": "Visitor already timed out (visit completed)."
@@ -1702,6 +1763,87 @@ def health_db():
         return jsonify(success=True, now=str(row["now"]))
     except Exception as e:
         return jsonify(success=False, error=str(e)), 500
+
+
+
+
+@app.route('/api/premises-status', methods=['GET'])
+def api_premises_status():
+    role = request.args.get("role")
+    department = request.args.get("department")
+
+    if not role:
+        return jsonify({"success": False, "message": "Missing role"}), 400
+
+    params_inside = []
+    params_left = []
+
+    where_inside = "where time_in is not null and time_out is null"
+    where_left = "where time_out is not null"
+
+    # dep_head sees only their own department
+    if role == "dep_head":
+        if not department:
+            return jsonify({"success": False, "message": "Missing department"}), 400
+
+        where_inside += " and department = %s"
+        where_left += " and department = %s"
+        params_inside.append(department)
+        params_left.append(department)
+
+    # admin and guard see all
+
+    inside_rows = fetchall(f"""
+        select
+            id, name, department, person_to_visit,
+            reason, visit_date, visit_time, time_in
+        from public.visitors
+        {where_inside}
+        order by time_in desc
+    """, tuple(params_inside))
+
+    left_rows = fetchall(f"""
+        select
+            id, name, department, person_to_visit,
+            reason, visit_date, visit_time, time_out
+        from public.visitors
+        {where_left}
+        order by time_out desc
+        limit 100
+    """, tuple(params_left))
+
+    inside = []
+    for r in inside_rows:
+        inside.append({
+            "id": r["id"],
+            "name": r["name"],
+            "department": r["department"],
+            "person_to_visit": r["person_to_visit"],
+            "reason": r["reason"],
+            "visit_date": str(r["visit_date"]) if r["visit_date"] else None,
+            "visit_time": str(r["visit_time"]) if r["visit_time"] else None,
+            "time_in": r["time_in"].isoformat() if r["time_in"] else None
+        })
+
+    left = []
+    for r in left_rows:
+        left.append({
+            "id": r["id"],
+            "name": r["name"],
+            "department": r["department"],
+            "person_to_visit": r["person_to_visit"],
+            "reason": r["reason"],
+            "visit_date": str(r["visit_date"]) if r["visit_date"] else None,
+            "visit_time": str(r["visit_time"]) if r["visit_time"] else None,
+            "time_out": r["time_out"].isoformat() if r["time_out"] else None
+        })
+
+    return jsonify({
+        "success": True,
+        "inside": inside,
+        "left": left
+    })
+
 
 
 # Run Flask
