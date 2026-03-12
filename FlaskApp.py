@@ -446,6 +446,37 @@ def build_guard_scan_body(brief: dict, action: str, actual_time: str) -> str:
     )
 
 
+def send_custom_visitor_email(to_email, subject, message_body):
+    if not EMAIL_ADDRESS:
+        return False, "EMAIL_USER environment variable is not set"
+
+    if not SENDGRID_API_KEY:
+        return False, "SENDGRID_API_KEY environment variable is not set"
+
+    message = Mail(
+        from_email=EMAIL_ADDRESS,
+        to_emails=to_email,
+        subject=subject,
+        html_content=f"""
+        <html>
+        <body>
+            <p>{message_body.replace('\n', '<br>')}</p>
+            <br>
+            <p>Best regards,<br>La Concepcion College</p>
+        </body>
+        </html>
+        """
+    )
+
+    try:
+        sg = SendGridAPIClient(SENDGRID_API_KEY)
+        sg.send(message)
+        return True, "Email sent"
+    except Exception as e:
+        print("custom visitor email error:", e)
+        return False, str(e)
+
+
 # ---------------- ROUTES ----------------
 
 # Homepage
@@ -1878,6 +1909,58 @@ def api_premises_status():
         "inside": inside,
         "left": left
     })
+
+@app.route('/api/dep/send-message/<int:visitor_id>', methods=['POST'])
+def api_dep_send_message(visitor_id):
+    try:
+        data = request.get_json(silent=True) or {}
+        department = (data.get("department") or "").strip()
+        message_text = (data.get("message") or "").strip()
+
+        if not department:
+            return jsonify({"success": False, "message": "Missing department"}), 400
+
+        if not message_text:
+            return jsonify({"success": False, "message": "Message is required"}), 400
+
+        row = fetchone("""
+            select id, name, email, department, time_in, time_out
+            from public.visitors
+            where id = %s
+        """, (visitor_id,))
+
+        if not row:
+            return jsonify({"success": False, "message": "Visitor not found"}), 404
+
+        # only same department
+        if row["department"] != department:
+            return jsonify({"success": False, "message": "Not allowed for this department"}), 403
+
+        # only visitors currently inside premises
+        if row["time_in"] is None or row["time_out"] is not None:
+            return jsonify({"success": False, "message": "Visitor is not currently inside the premises"}), 400
+
+        subject = "Message from Department Head - La Concepcion College"
+        full_message = (
+            f"Hello {row['name']},\n\n"
+            f"{message_text}\n\n"
+            f"This message was sent while you are currently inside the premises."
+        )
+
+        success, info = send_custom_visitor_email(
+            to_email=row["email"],
+            subject=subject,
+            message_body=full_message
+        )
+
+        if not success:
+            return jsonify({"success": False, "message": info}), 500
+
+        return jsonify({"success": True, "message": "Email sent successfully"})
+
+    except Exception as e:
+        print("api_dep_send_message error:", e)
+        return jsonify({"success": False, "message": "Server error"}), 500
 
 
 
