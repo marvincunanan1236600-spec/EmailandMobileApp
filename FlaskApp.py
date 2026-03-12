@@ -1775,11 +1775,13 @@ def api_premises_status():
     if not role:
         return jsonify({"success": False, "message": "Missing role"}), 400
 
+    today_ph = datetime.now(ZoneInfo("Asia/Manila")).date()
+
     params_inside = []
-    params_left = []
+    params_left = [today_ph]
 
     where_inside = "where time_in is not null and time_out is null"
-    where_left = "where time_out is not null"
+    where_left = "where time_out is not null and visit_date = %s"
 
     # dep_head sees only their own department
     if role == "dep_head":
@@ -1790,8 +1792,6 @@ def api_premises_status():
         where_left += " and department = %s"
         params_inside.append(department)
         params_left.append(department)
-
-    # admin and guard see all
 
     inside_rows = fetchall(f"""
         select
