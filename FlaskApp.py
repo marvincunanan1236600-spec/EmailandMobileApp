@@ -1118,6 +1118,8 @@ def api_login():
 
 @app.route('/api/admin/visitors', methods=['GET'])
 def api_admin_visitors():
+    today_ph = datetime.now(ZoneInfo("Asia/Manila")).date()
+
     rows = fetchall("""
         select
             id,
@@ -1130,27 +1132,43 @@ def api_admin_visitors():
             email,
             valid_id,
             status,
+            time_in,
+            time_out,
             created_at,
             decision_note,
             decided_by,
             decided_at
         from public.visitors
-        order by id desc
+        order by visit_date desc, visit_time desc, id desc
     """)
 
     visitors = []
     for r in rows:
+        visit_date = r["visit_date"]
+        time_in = r["time_in"]
+
+        derived_status = r["status"]
+
+        if visit_date and visit_date < today_ph:
+            if time_in is not None:
+                derived_status = "Completed"
+            else:
+                derived_status = "No-show"
+
         visitors.append({
             "id": r["id"],
             "name": r["name"],
             "reason": r["reason"],
             "department": r["department"],
             "person_to_visit": r["person_to_visit"],
-            "visit_date": str(r["visit_date"]) if r["visit_date"] else None,
+            "visit_date": str(visit_date) if visit_date else None,
             "visit_time": str(r["visit_time"]) if r["visit_time"] else None,
             "email": r["email"],
-            "valid_id": r["valid_id"],   # ✅ added
-            "status": r["status"],
+            "valid_id": r["valid_id"],
+            "status": r["status"],                  # original DB status
+            "derived_status": derived_status,       # computed display status
+            "time_in": r["time_in"].isoformat() if r["time_in"] else None,
+            "time_out": r["time_out"].isoformat() if r["time_out"] else None,
             "created_at": r["created_at"].isoformat() if r["created_at"] else None,
             "decision_note": r["decision_note"],
             "decided_by": r["decided_by"],
@@ -1439,28 +1457,45 @@ def api_dep_visitors():
     if not department:
         return jsonify({"success": False, "message": "Missing department"}), 400
 
+    today_ph = datetime.now(ZoneInfo("Asia/Manila")).date()
+
     rows = fetchall("""
         select
             id, name, reason, department, person_to_visit,
-            visit_date, visit_time, email, status, created_at,
-            decision_note, decided_by, decided_at
+            visit_date, visit_time, email, valid_id, status,
+            time_in, time_out, created_at, decision_note, decided_by, decided_at
         from public.visitors
         where department = %s
-        order by id desc
+        order by visit_date desc, visit_time desc, id desc
     """, (department,))
 
     visitors = []
     for r in rows:
+        visit_date = r["visit_date"]
+        time_in = r["time_in"]
+
+        derived_status = r["status"]
+
+        if visit_date and visit_date < today_ph:
+            if time_in is not None:
+                derived_status = "Completed"
+            else:
+                derived_status = "No-show"
+
         visitors.append({
             "id": r["id"],
             "name": r["name"],
             "reason": r["reason"],
             "department": r["department"],
             "person_to_visit": r["person_to_visit"],
-            "visit_date": str(r["visit_date"]) if r["visit_date"] else None,
+            "visit_date": str(visit_date) if visit_date else None,
             "visit_time": str(r["visit_time"]) if r["visit_time"] else None,
             "email": r["email"],
+            "valid_id": r["valid_id"],
             "status": r["status"],
+            "derived_status": derived_status,
+            "time_in": r["time_in"].isoformat() if r["time_in"] else None,
+            "time_out": r["time_out"].isoformat() if r["time_out"] else None,
             "created_at": r["created_at"].isoformat() if r["created_at"] else None,
             "decision_note": r["decision_note"],
             "decided_by": r["decided_by"],
