@@ -249,61 +249,32 @@ init_notifications_database()
 
 # ---------------- EMAIL SETTINGS ----------------
 EMAIL_ADDRESS = os.environ.get("EMAIL_USER")
-SENDGRID_API_KEY = os.environ.get("SENDGRID_API_KEY")
+EMAIL_PASSWORD = os.environ.get("EMAIL_PASS")
 
 
 def send_email_otp(to_email, otp):
-    """
-    Send OTP email via SendGrid
-    Returns: (success: bool, message: str)
-    """
-    print("📧 Attempting to send OTP email via SendGrid...")
-    print(f"📧 From: {EMAIL_ADDRESS}")
-    print(f"📧 To: {to_email}")
-
-    # Check if credentials are set
-    if not EMAIL_ADDRESS:
-        error_msg = "EMAIL_USER environment variable is not set"
-        print(f"❌ {error_msg}")
-        return False, error_msg
-
-    if not SENDGRID_API_KEY:
-        error_msg = "SENDGRID_API_KEY environment variable is not set"
-        print(f"❌ {error_msg}")
-        return False, error_msg
-
-    message = Mail(
-        from_email=EMAIL_ADDRESS,
-        to_emails=to_email,
-        subject='Email Verification Code - La Concepcion College',
-        html_content=f"""
-        <html>
-        <body>
-            <p>Dear Visitor,</p>
-            <p>Thank you for using the Gate Pass Appointment System.</p>
-            <p>Your One-Time Verification Code (OTP) is: <b style="font-size: 24px; color: #0066cc;">{otp}</b></p>
-            <p>Please enter this code on the Appointment website to verify your email address and continue your appointment request.</p>
-            <p>This code will expire in 10 minutes.</p>
-            <p>If you did not attempt to register, please ignore this message.</p>
-            <br>
-            <p>Best regards,<br>Gate Pass System Team<br>La Concepcion College</p>
-        </body>
-        </html>
-        """
-    )
-
     try:
-        sg = SendGridAPIClient(SENDGRID_API_KEY)
-        response = sg.send(message)
-        print(f"✅ Email sent successfully! Status code: {response.status_code}")
+        subject = "Your OTP Code"
+        body = f"Your OTP code is: {otp}"
+
+        msg = MIMEText(body)
+        msg["Subject"] = subject
+        msg["From"] = EMAIL_ADDRESS
+        msg["To"] = to_email
+
+        # Connect to Brevo SMTP
+        server = smtplib.SMTP("smtp-relay.brevo.com", 587)
+        server.starttls()
+        server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+
+        server.sendmail(EMAIL_ADDRESS, to_email, msg.as_string())
+        server.quit()
+
         return True, "Email sent successfully"
+
     except Exception as e:
-        error_msg = f"SendGrid Error: {str(e)}"
-        print(f"❌ {error_msg}")
-        # Print more details for debugging
-        if hasattr(e, 'body'):
-            print(f"❌ Error body: {e.body}")
-        return False, error_msg
+        print("Error:", e)
+        return False, str(e)
 
 
 def generate_otp():
