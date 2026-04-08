@@ -13,6 +13,7 @@ import mimetypes
 import uuid
 import smtplib
 from email.mime.text import MIMEText
+import requests
 
 app = Flask(__name__)
 app.secret_key = 'supersecretkey'
