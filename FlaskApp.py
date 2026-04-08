@@ -265,7 +265,7 @@ def send_email_otp(to_email, otp):
         msg["To"] = to_email
 
         # Connect to Brevo SMTP
-        server = smtplib.SMTP("smtp-relay.brevo.com", 587)
+        server = smtplib.SMTP_SSL("smtp-relay.brevo.com", 465, timeout=10)
         server.starttls()
         server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
 
