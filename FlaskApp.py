@@ -11,6 +11,8 @@ from db import fetchone, fetchall, execute
 from supabase import create_client, Client
 import mimetypes
 import uuid
+import smtplib
+from email.mime.text import MIMEText
 
 app = Flask(__name__)
 app.secret_key = 'supersecretkey'
