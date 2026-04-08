@@ -250,28 +250,36 @@ init_notifications_database()
 
 
 # ---------------- EMAIL SETTINGS ----------------
-EMAIL_ADDRESS = os.environ.get("EMAIL_USER")
-EMAIL_PASSWORD = os.environ.get("EMAIL_PASS")
+# Make sure you set these in your .env or system environment variables
+EMAIL_USER = os.environ.get("EMAIL_USER")       # Verified Brevo sender email
+EMAIL_API_KEY = os.environ.get("EMAIL_PASS")    # Brevo API key
 
 
 def send_email_otp(to_email, otp):
+    """
+    Sends OTP email using Brevo API.
+    Returns: (success: bool, message: str)
+    """
+    url = "https://api.brevo.com/v3/smtp/email"
+    headers = {
+        "accept": "application/json",
+        "api-key": EMAIL_API_KEY,
+        "content-type": "application/json"
+    }
+    payload = {
+        "sender": {"name": "Capstone Project", "email": EMAIL_USER},
+        "to": [{"email": to_email}],
+        "subject": "Your OTP Code",
+        "htmlContent": f"<html><body><p>Your OTP code is: <b>{otp}</b></p></body></html>"
+    }
+
     try:
-        msg = MIMEText(f"Your OTP code is: {otp}")
-        msg["Subject"] = "OTP Verification"
-        msg["From"] = EMAIL_ADDRESS
-        msg["To"] = to_email
-
-        # 🔥 Use SSL instead of TLS
-        server = smtplib.SMTP_SSL("smtp-relay.brevo.com", 465, timeout=10)
-        server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
-
-        server.sendmail(EMAIL_ADDRESS, to_email, msg.as_string())
-        server.quit()
-
-        return True, "Email sent successfully"
-
+        response = requests.post(url, json=payload, headers=headers)
+        if response.status_code == 201:
+            return True, "Email sent successfully"
+        else:
+            return False, f"Failed to send: {response.text}"
     except Exception as e:
-        print("Error:", e)
         return False, str(e)
 
 
