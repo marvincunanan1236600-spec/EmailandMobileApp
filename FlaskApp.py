@@ -256,17 +256,13 @@ EMAIL_PASSWORD = os.environ.get("EMAIL_PASS")
 
 def send_email_otp(to_email, otp):
     try:
-        subject = "Your OTP Code"
-        body = f"Your OTP code is: {otp}"
-
-        msg = MIMEText(body)
-        msg["Subject"] = subject
+        msg = MIMEText(f"Your OTP code is: {otp}")
+        msg["Subject"] = "OTP Verification"
         msg["From"] = EMAIL_ADDRESS
         msg["To"] = to_email
 
-        # Connect to Brevo SMTP
+        # 🔥 Use SSL instead of TLS
         server = smtplib.SMTP_SSL("smtp-relay.brevo.com", 465, timeout=10)
-        server.starttls()
         server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
 
         server.sendmail(EMAIL_ADDRESS, to_email, msg.as_string())
