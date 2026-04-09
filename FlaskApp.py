@@ -924,20 +924,19 @@ def approve_visitor(visitor_id):
     if row:
         email = row["email"]
         qr_link = f"https://emailandmobileapp.onrender.com/generate_qr/{visitor_id}"
-        message = Mail(
-            from_email=EMAIL_ADDRESS,
-            to_emails=email,
-            subject="Visit Approved - La Concepcion College",
-            html_content=f"""
-                <p>Your visit has been <b>approved</b>.</p>
-                <p>Please save your QR code here:</p>
-                <a href="{qr_link}">{qr_link}</a>
-            """
-        )
-        try:
-            SendGridAPIClient(SENDGRID_API_KEY).send(message)
-        except Exception as e:
-            print("Approval email failed:", e)
+
+        subject = "Visit Approved - La Concepcion College"
+        message_body = f"""
+    Your visit has been APPROVED.
+
+    Please save your QR code here:
+    {qr_link}
+    """
+
+        success, msg = send_custom_visitor_email(email, subject, message_body)
+
+        if not success:
+            print("Approval email failed:", msg)
 
     return redirect('/admin/dashboard')
 
@@ -987,16 +986,14 @@ def decline_visitor(visitor_id):
     row = fetchone("select email from public.visitors where id=%s", (visitor_id,))
     if row:
         email = row["email"]
-        message = Mail(
-            from_email=EMAIL_ADDRESS,
-            to_emails=email,
-            subject="Visit Declined - La Concepcion College",
-            html_content="<p>We are sorry, your visit request was <b>declined</b>.</p>"
-        )
-        try:
-            SendGridAPIClient(SENDGRID_API_KEY).send(message)
-        except Exception as e:
-            print("Decline email failed:", e)
+
+        subject = "Visit Declined - La Concepcion College"
+        message_body = "We are sorry, your visit request was DECLINED."
+
+        success, msg = send_custom_visitor_email(email, subject, message_body)
+
+        if not success:
+            print("Decline email failed:", msg)
 
     return redirect('/admin/dashboard')
 
