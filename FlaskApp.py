@@ -3,8 +3,6 @@ from flask import Flask, render_template, request, redirect, session, send_from_
 import os, random, sqlite3, qrcode, io, base64
 from werkzeug.utils import secure_filename
 from datetime import datetime, timedelta
-from sendgrid import SendGridAPIClient
-from sendgrid.helpers.mail import Mail
 from zoneinfo import ZoneInfo
 from flask import jsonify, request
 from db import fetchone, fetchall, execute
@@ -425,31 +423,46 @@ def build_guard_scan_body(brief: dict, action: str, actual_time: str) -> str:
 
 
 def send_custom_visitor_email(to_email, subject, message_body):
-    if not EMAIL_ADDRESS:
-        return False, "EMAIL_USER environment variable is not set"
+    if not EMAIL_USER:
+        return False, "EMAIL_USER is not set"
 
-    if not SENDGRID_API_KEY:
-        return False, "SENDGRID_API_KEY environment variable is not set"
+    if not EMAIL_API_KEY:
+        return False, "EMAIL_PASS (Brevo API key) is not set"
 
-    message = Mail(
-        from_email=EMAIL_ADDRESS,
-        to_emails=to_email,
-        subject=subject,
-        html_content=f"""
-        <html>
-        <body>
-            <p>{message_body.replace('\n', '<br>')}</p>
-            <br>
-            <p>Best regards,<br>La Concepcion College</p>
-        </body>
-        </html>
-        """
-    )
+    url = "https://api.brevo.com/v3/smtp/email"
+
+    headers = {
+        "accept": "application/json",
+        "api-key": EMAIL_API_KEY,
+        "content-type": "application/json"
+    }
+
+    html_content = f"""
+    <html>
+    <body>
+        <p>{message_body.replace('\n', '<br>')}</p>
+        <br>
+        <p>Best regards,<br>La Concepcion College</p>
+    </body>
+    </html>
+    """
+
+    payload = {
+        "sender": {"name": "La Concepcion College", "email": EMAIL_USER},
+        "to": [{"email": to_email}],
+        "subject": subject,
+        "htmlContent": html_content
+    }
 
     try:
-        sg = SendGridAPIClient(SENDGRID_API_KEY)
-        sg.send(message)
-        return True, "Email sent"
+        response = requests.post(url, json=payload, headers=headers)
+
+        if response.status_code == 201:
+            return True, "Email sent"
+        else:
+            print("Brevo error:", response.text)
+            return False, response.text
+
     except Exception as e:
         print("custom visitor email error:", e)
         return False, str(e)
