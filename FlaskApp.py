@@ -1254,22 +1254,18 @@ def api_admin_approve(visitor_id):
         # 5) Email approved QR link
         qr_link = f"https://emailandmobileapp.onrender.com/generate_qr/{visitor_id}"
 
-        message = Mail(
-            from_email=EMAIL_ADDRESS,
-            to_emails=email,
-            subject="Visit Approved - La Concepcion College",
-            html_content=f"""
-                <p>Your visit has been <b>approved</b>.</p>
-                <p>Please save your QR code here:</p>
-                <a href="{qr_link}">{qr_link}</a>
-            """
-        )
+        subject = "Visit Approved - La Concepcion College"
+        message_body = f"""
+        Your visit has been APPROVED.
 
-        try:
-            sg = SendGridAPIClient(SENDGRID_API_KEY)
-            sg.send(message)
-        except Exception as e:
-            print("Approval email failed:", e)
+        Please save your QR code here:
+        {qr_link}
+        """
+
+        success, msg = send_custom_visitor_email(email, subject, message_body)
+
+        if not success:
+            print("Approval email failed:", msg)
 
         return jsonify({"success": True, "message": "Approved", "note_saved": bool(note)})
 
@@ -1345,23 +1341,17 @@ def api_admin_decline(visitor_id):
             )
 
         # 5) Email (include note)
-        note_html = f"<p><b>Reason / Note:</b> {note}</p>" if note else ""
+        subject = "Visit Declined - La Concepcion College"
 
-        message = Mail(
-            from_email=EMAIL_ADDRESS,
-            to_emails=email,
-            subject="Visit Declined - La Concepcion College",
-            html_content=f"""
-                <p>We are sorry, your visit request was <b>declined</b>.</p>
-                {note_html}
-            """
-        )
+        message_body = "We are sorry, your visit request was DECLINED."
 
-        try:
-            sg = SendGridAPIClient(SENDGRID_API_KEY)
-            sg.send(message)
-        except Exception as e:
-            print("Decline email failed:", e)
+        if note:
+            message_body += f"\n\nReason / Note: {note}"
+
+        success, msg = send_custom_visitor_email(email, subject, message_body)
+
+        if not success:
+            print("Decline email failed:", msg)
 
         return jsonify({
             "success": True,
