@@ -271,6 +271,20 @@
             }
         });
     });
+
+  fetch('/api/disabled-dates')
+  .then(res => res.json())
+  .then(data => {
+        const disabledDates = data.dates;
+        const input = document.querySelector('input[name="visit_date"]');
+
+        input.addEventListener('input', function () {
+            if (disabledDates.includes(this.value)) {
+                alert("This date is unavailable.");
+                this.value = "";
+            }
+        });
+    });
 </script>
 </body>
 </html>

@@ -184,6 +184,26 @@ tr:hover {
             <a href="{{ url_for('download_csv', filter=filter_type) }}">Download CSV</a>
         </div>
 
+        <div style="margin-top:20px; text-align:center;">
+    <h3 style="color:white;">Manage Disabled Dates</h3>
+
+    <input type="date" id="disableDate" required>
+
+    <input type="text" id="disableReason"
+           placeholder="Reason (optional)"
+           style="padding:6px; border-radius:6px;">
+
+    <button onclick="disableDate()"
+            style="padding:8px 15px; background:#dc3545; color:white; border:none; border-radius:6px;">
+        Disable Date
+    </button>
+
+    <button onclick="enableDate()"
+            style="padding:8px 15px; background:#28a745; color:white; border:none; border-radius:6px;">
+        Enable Date
+    </button>
+</div>
+
         <div class="table-wrapper">
             <table>
 <tr>
@@ -241,5 +261,54 @@ tr:hover {
 
         </div>
     </div>
+<script>
+function disableDate() {
+    const date = document.getElementById("disableDate").value;
+    const reason = document.getElementById("disableReason").value;
+
+    if (!date) {
+        alert("Please select a date.");
+        return;
+    }
+
+    fetch('/api/admin/disable-date', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date, reason })
+    })
+    .then(res => res.json())
+    .then(data => {
+        alert("Date disabled successfully!");
+    })
+    .catch(err => {
+        console.error(err);
+        alert("Error disabling date.");
+    });
+}
+
+function enableDate() {
+    const date = document.getElementById("disableDate").value;
+
+    if (!date) {
+        alert("Please select a date.");
+        return;
+    }
+
+    fetch('/api/admin/enable-date', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date })
+    })
+    .then(res => res.json())
+    .then(data => {
+        alert("Date enabled successfully!");
+    })
+    .catch(err => {
+        console.error(err);
+        alert("Error enabling date.");
+    });
+}
+</script>
+
 </body>
 </html>

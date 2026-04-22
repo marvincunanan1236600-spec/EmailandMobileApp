@@ -601,6 +601,20 @@ def send_verification():
             message="⚠️ This date is already fully booked. Please select another date."
         )
 
+    # 🚫 DISABLED DATE CHECK
+    blocked = fetchone("""
+        select 1
+        from public.disabled_dates
+        where date = %s
+        limit 1
+    """, (visit_date,))
+
+    if blocked:
+        return render_template(
+            "Error.html",
+            message="❌ This date is unavailable (school closed). Please choose another date."
+        )
+
     # Store visitor info in session (used by verify_otp)
     # ✅ Handle dropdown + Others
     reason_select = request.form.get('reason_select')
@@ -2004,6 +2018,46 @@ def get_full_dates():
     return jsonify({
         "success": True,
         "full_dates": full_dates
+    })
+
+@app.route('/api/admin/disable-date', methods=['POST'])
+def disable_date():
+    data = request.get_json()
+
+    date = data.get("date")
+    reason = data.get("reason")
+
+    execute("""
+        insert into public.disabled_dates (date, reason)
+        values (%s, %s)
+        on conflict (date) do nothing
+    """, (date, reason))
+
+    return jsonify({"success": True})
+
+@app.route('/api/admin/enable-date', methods=['POST'])
+def enable_date():
+    data = request.get_json()
+
+    date = data.get("date")
+
+    execute("""
+        delete from public.disabled_dates
+        where date = %s
+    """, (date,))
+
+    return jsonify({"success": True})
+
+@app.route('/api/disabled-dates', methods=['GET'])
+def get_disabled_dates():
+    rows = fetchall("""
+        select date
+        from public.disabled_dates
+    """)
+
+    return jsonify({
+        "success": True,
+        "dates": [str(r["date"]) for r in rows]
     })
 
 
