@@ -586,6 +586,21 @@ def send_verification():
             message="⚠️ You already have an appointment for this date and time."
         )
 
+    # ✅ DAILY LIMIT CHECK (max 10 visitors per date)
+    count_row = fetchone("""
+        select count(*) as total
+        from public.visitors
+        where visit_date = %s
+    """, (visit_date,))
+
+    current_count = count_row["total"] if count_row else 0
+
+    if current_count >= 10:
+        return render_template(
+            "Error.html",
+            message="⚠️ This date is already fully booked. Please select another date."
+        )
+
     # Store visitor info in session (used by verify_otp)
     # ✅ Handle dropdown + Others
     reason_select = request.form.get('reason_select')
@@ -1974,6 +1989,22 @@ def api_dep_send_message(visitor_id):
     except Exception as e:
         print("api_dep_send_message error:", e)
         return jsonify({"success": False, "message": "Server error"}), 500
+
+@app.route('/api/full-dates', methods=['GET'])
+def get_full_dates():
+    rows = fetchall("""
+        select visit_date, count(*) as total
+        from public.visitors
+        group by visit_date
+        having count(*) >= 10
+    """)
+
+    full_dates = [str(r["visit_date"]) for r in rows]
+
+    return jsonify({
+        "success": True,
+        "full_dates": full_dates
+    })
 
 
 

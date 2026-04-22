@@ -256,6 +256,21 @@
             reasonOther.value = "";
         }
     });
+
+    fetch('/api/full-dates')
+    .then(res => res.json())
+    .then(data => {
+        const fullDates = data.full_dates;
+
+        const dateInput = document.querySelector('input[name="visit_date"]');
+
+        dateInput.addEventListener('input', function () {
+            if (fullDates.includes(this.value)) {
+                alert("This date is already fully booked.");
+                this.value = "";
+            }
+        });
+    });
 </script>
 </body>
 </html>
