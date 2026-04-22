@@ -595,7 +595,7 @@ def send_verification():
 
     current_count = count_row["total"] if count_row else 0
 
-    if current_count >= 10:
+    if current_count >= 5:
         return render_template(
             "Error.html",
             message="⚠️ This date is already fully booked. Please select another date."
@@ -1996,7 +1996,7 @@ def get_full_dates():
         select visit_date, count(*) as total
         from public.visitors
         group by visit_date
-        having count(*) >= 10
+        having count(*) >= 5
     """)
 
     full_dates = [str(r["visit_date"]) for r in rows]
