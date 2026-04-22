@@ -587,13 +587,26 @@ def send_verification():
         )
 
     # Store visitor info in session (used by verify_otp)
+    # ✅ Handle dropdown + Others
+    reason_select = request.form.get('reason_select')
+    reason_other = request.form.get('reason_other')
+
+    if reason_select == "Others":
+        reason = (reason_other or "").strip()
+    else:
+        reason = reason_select
+
+    if not reason:
+        return render_template("Error.html", message="Please provide a reason for visit.")
+
+    # Store visitor info in session
     session['visitor_info'] = {
         'name': name,
-        'reason': request.form['reason'].strip(),
+        'reason': reason,  # ✅ updated
         'person_to_visit': request.form['person_to_visit'].strip(),
         'department': request.form['department'].strip(),
         'visit_date': visit_date,
-        'visit_time': visit_time,  # now HH:MM:SS
+        'visit_time': visit_time,
         'email': email
     }
 

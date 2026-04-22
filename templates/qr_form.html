@@ -134,7 +134,24 @@
 
                 <div class="form-group">
                     <label>Reason for Visit <span class="required">*</span></label>
-                    <textarea name="reason" placeholder="Why are you visiting?" required></textarea>
+
+                     <!-- Dropdown -->
+                    <select name="reason_select" id="reasonSelect" required>
+                    <option value="" disabled selected>Select a reason</option>
+                    <option value="Inquiry">Inquiry</option>
+                    <option value="Meeting">Meeting</option>
+                    <option value="Document Submission">Document Submission</option>
+                    <option value="Follow-up">Follow-up</option>
+                    <option value="Others">Others</option>
+                    </select>
+
+                   <!-- Others textarea -->
+                   <textarea
+                    name="reason_other"
+                    id="reasonOther"
+                    placeholder="Please specify your reason"
+                    style="display:none; margin-top:10px;"
+                  ></textarea>
                 </div>
 
                 <div class="form-group">
@@ -225,6 +242,20 @@
     if (timeInput.value < "09:00") timeInput.value = "09:00";
     if (timeInput.value > "16:00") timeInput.value = "16:00";
   });
+
+    const reasonSelect = document.getElementById("reasonSelect");
+    const reasonOther = document.getElementById("reasonOther");
+
+    reasonSelect.addEventListener("change", function () {
+        if (this.value === "Others") {
+            reasonOther.style.display = "block";
+            reasonOther.required = true;
+        } else {
+            reasonOther.style.display = "none";
+            reasonOther.required = false;
+            reasonOther.value = "";
+        }
+    });
 </script>
 </body>
 </html>
