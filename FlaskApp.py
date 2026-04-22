@@ -2060,6 +2060,56 @@ def get_disabled_dates():
         "dates": [str(r["date"]) for r in rows]
     })
 
+@app.route('/api/admin/analytics', methods=['GET'])
+def admin_analytics():
+    mode = request.args.get("mode", "day")
+
+    if mode == "day":
+        rows = fetchall("""
+            select to_char(visit_date, 'Dy') as label, count(*) as total
+            from public.visitors
+            where visit_date >= current_date - interval '6 days'
+            group by label, visit_date
+            order by visit_date
+        """)
+
+    elif mode == "week":
+        rows = fetchall("""
+            select
+                'Week ' || ceil(extract(day from visit_date)/7.0) as label,
+                count(*) as total
+            from public.visitors
+            where date_trunc('month', visit_date) = date_trunc('month', current_date)
+            group by label
+            order by label
+        """)
+
+    elif mode == "month":
+        rows = fetchall("""
+            select to_char(visit_date, 'Mon') as label, count(*) as total
+            from public.visitors
+            where date_trunc('year', visit_date) = date_trunc('year', current_date)
+            group by label, extract(month from visit_date)
+            order by extract(month from visit_date)
+        """)
+
+    elif mode == "year":
+        rows = fetchall("""
+            select extract(year from visit_date)::text as label, count(*) as total
+            from public.visitors
+            group by label
+            order by label
+        """)
+
+    else:
+        return jsonify({"success": False})
+
+    return jsonify({
+        "success": True,
+        "labels": [r["label"] for r in rows],
+        "data": [r["total"] for r in rows]
+    })
+
 
 
 # Run Flask

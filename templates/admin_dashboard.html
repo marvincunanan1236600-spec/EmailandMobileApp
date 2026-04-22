@@ -147,6 +147,7 @@ tr:hover {
             }
         }
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
     <div class="container">
@@ -259,6 +260,19 @@ tr:hover {
 {% endfor %}
 </table>
 
+            <h2 style="color:white; text-align:center; margin-top:40px;">
+    Visitor Analytics
+</h2>
+
+<div style="text-align:center; margin-bottom:10px;">
+    <button onclick="loadChart('day')">Day</button>
+    <button onclick="loadChart('week')">Week</button>
+    <button onclick="loadChart('month')">Month</button>
+    <button onclick="loadChart('year')">Year</button>
+</div>
+
+<canvas id="visitorChart" height="100"></canvas>
+
         </div>
     </div>
 <script>
@@ -308,6 +322,43 @@ function enableDate() {
         alert("Error enabling date.");
     });
 }
+
+    let chart;
+
+function loadChart(mode) {
+    fetch(`/api/admin/analytics?mode=${mode}`)
+        .then(res => res.json())
+        .then(data => {
+            if (!data.success) return;
+
+            const ctx = document.getElementById('visitorChart').getContext('2d');
+
+            if (chart) chart.destroy();
+
+            chart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: data.labels,
+                    datasets: [{
+                        label: 'Visitors',
+                        data: data.data,
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        });
+}
+
+// Load default chart
+loadChart('day');
 </script>
 
 </body>
