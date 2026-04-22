@@ -517,6 +517,28 @@ def send_verification():
     email = request.form['email'].strip()
     visit_date = request.form['visit_date'].strip()
     visit_time = request.form['visit_time'].strip()
+    birthdate_str = request.form.get('birthdate')  # 👈 NEW
+
+    # 🔥 AGE VALIDATION HERE
+    if not birthdate_str:
+        return render_template("Error.html", message="Birthdate is required.")
+
+    try:
+        birthdate = datetime.strptime(birthdate_str, "%Y-%m-%d").date()
+    except ValueError:
+        return render_template("Error.html", message="Invalid birthdate.")
+
+    today = datetime.now(ZoneInfo("Asia/Manila")).date()
+
+    age = today.year - birthdate.year - (
+            (today.month, today.day) < (birthdate.month, birthdate.day)
+    )
+
+    if age < 18:
+        return render_template(
+            "Error.html",
+            message="❌ You must be at least 18 years old to make an appointment."
+        )
 
     # Normalize time to HH:MM:SS for Postgres time type (safer)
     if len(visit_time) == 5:
