@@ -518,6 +518,8 @@ def send_verification():
     visit_date = request.form['visit_date'].strip()
     visit_time = request.form['visit_time'].strip()
     birthdate_str = request.form.get('birthdate')  # 👈 NEW
+    phone = request.form.get("phone")
+    contact_method = request.form.get("contact_method")
 
     # 🔥 AGE VALIDATION HERE
     if not birthdate_str:
@@ -636,7 +638,9 @@ def send_verification():
         'department': request.form['department'].strip(),
         'visit_date': visit_date,
         'visit_time': visit_time,
-        'email': email
+        'email': email if contact_method == "email" else None,
+        'phone': phone if contact_method == "phone" else None,
+        'contact_method': contact_method
     }
 
     # Save uploaded ID filename (file is still stored on Render disk)
@@ -656,14 +660,29 @@ def send_verification():
     session['otp'] = otp
     session['otp_timestamp'] = datetime.now().timestamp()
 
-    success, msg = send_email_otp(email, otp)
+    contact_method = request.form.get("contact_method")
 
-    if success:
-        return render_template('verify_email.html', email=email)
+    # 📧 EMAIL FLOW (your current behavior)
+    if contact_method == "email":
+        success, msg = send_email_otp(email, otp)
 
-    error_message = f"❌ Failed to send verification email. {msg}"
-    print(error_message)
-    return render_template('Error.html', message=error_message)
+        if success:
+            return render_template('verify_email.html', email=email)
+
+        error_message = f"❌ Failed to send verification email. {msg}"
+        print(error_message)
+        return render_template('Error.html', message=error_message)
+
+
+    # 📱 PHONE FLOW (no email sending)
+    elif contact_method == "phone":
+        # Skip sending, just go to verification page
+        return render_template('verify_phone.html', phone=phone)
+
+
+    # ❌ Safety fallback
+    else:
+        return render_template("Error.html", message="Invalid contact method.")
 
 
 # Verify OTP
@@ -672,6 +691,14 @@ def verify_otp():
     entered_otp = request.form.get('otp', '').strip()
     stored_otp = session.get('otp')
     otp_timestamp = session.get('otp_timestamp')
+
+    contact_method = visitor_info.get("contact_method")
+
+    contact_value = (
+        visitor_info.get("email")
+        if contact_method == "email"
+        else visitor_info.get("phone")
+    )
 
     # Check if OTP exists
     if not stored_otp:
@@ -711,13 +738,14 @@ def verify_otp():
             visitor_info['department'],
             visitor_info['visit_date'],   # 'YYYY-MM-DD' ok
             visitor_info['visit_time'],   # 'HH:MM' ok
-            visitor_info['email'],
+            contact_value,
             filename
         ))
 
         visitor_id = row["id"]
         session["visitor_id"] = int(visitor_id)
-        session["verified_email"] = visitor_info["email"]
+        session["contact_method"] = contact_method
+        session["contact_value"] = contact_value
 
         # ✅ Optional: notify admin that there is a new pending appointment
         add_notification(
