@@ -677,7 +677,7 @@ def send_verification():
     # 📱 PHONE FLOW (no email sending)
     elif contact_method == "phone":
         # Skip sending, just go to verification page
-        return render_template('verify_phone.html', phone=phone)
+        return render_template('verify_email.html', phone=phone)
 
 
     # ❌ Safety fallback
