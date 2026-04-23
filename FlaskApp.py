@@ -2066,11 +2066,18 @@ def admin_analytics():
 
     if mode == "day":
         rows = fetchall("""
-            select to_char(visit_date, 'Dy') as label, count(*) as total
-            from public.visitors
-            where visit_date >= current_date - interval '6 days'
-            group by label, visit_date
-            order by visit_date
+            select
+                to_char(d.day, 'Dy') as label,
+                coalesce(count(v.id), 0) as total
+            from generate_series(
+                current_date - interval '6 days',
+                current_date,
+                interval '1 day'
+            ) as d(day)
+            left join public.visitors v
+                on v.visit_date = d.day
+            group by d.day
+            order by d.day
         """)
 
     elif mode == "week":
