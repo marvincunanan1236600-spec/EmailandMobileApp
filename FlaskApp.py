@@ -692,7 +692,7 @@ def verify_otp():
     stored_otp = session.get('otp')
     otp_timestamp = session.get('otp_timestamp')
 
-    contact_method = visitor_info.get("contact_method")
+    visitor_info = session.get('visitor_info')
 
     contact_value = (
         visitor_info.get("email")
@@ -713,7 +713,7 @@ def verify_otp():
     if entered_otp != stored_otp:
         return render_template('Error.html', message="❌ Invalid OTP. Please try again or request a new code.")
 
-    visitor_info = session.get('visitor_info')
+    contact_method = visitor_info.get("contact_method")
     filename = session.get('valid_id_filename')
 
     if not visitor_info:
