@@ -693,6 +693,7 @@ def verify_otp():
     otp_timestamp = session.get('otp_timestamp')
 
     visitor_info = session.get('visitor_info')
+    contact_method = visitor_info.get("contact_method")
 
     contact_value = (
         visitor_info.get("email")
