@@ -588,19 +588,20 @@ def send_verification():
             message="⚠️ You already have an appointment for this date and time."
         )
 
-    # ✅ DAILY LIMIT CHECK (max 10 visitors per date)
+    # ✅ DAILY LIMIT CHECK (max 5 visitors per date)
     count_row = fetchone("""
         select count(*) as total
         from public.visitors
         where visit_date = %s
+        and status = 'Approved'
     """, (visit_date,))
 
-    current_count = count_row["total"] if count_row else 0
+    current_count = int(count_row["total"]) if count_row and count_row["total"] is not None else 0
 
     if current_count >= 5:
         return render_template(
             "Error.html",
-            message="⚠️ This date is already fully booked. Please select another date."
+            message="⚠️ This date already has 5 approved visitors. Please choose another date."
         )
 
     # 🚫 DISABLED DATE CHECK
@@ -1295,10 +1296,47 @@ def api_admin_approve(visitor_id):
         data = request.get_json(silent=True) or {}
         note = (data.get("note") or "").strip() or None
 
-        decided_by = "admin"  # later: from auth token/session
-        decided_at = datetime.now(ZoneInfo("Asia/Manila"))  # timestamptz-friendly
+        decided_by = "admin"  # later: from auth/session
+        decided_at = datetime.now(ZoneInfo("Asia/Manila"))
 
-        # 1) Update visitor decision (Postgres)
+        # 🔥 STEP 0: Check if visitor exists + get visit_date + status
+        row = fetchone("""
+            select visit_date, status
+            from public.visitors
+            where id = %s
+        """, (visitor_id,))
+
+        if not row:
+            return jsonify({"success": False, "message": "Visitor not found"}), 404
+
+        visit_date = row["visit_date"]
+        current_status = row["status"]
+
+        # 🔥 STEP 1: Prevent double approval
+        if current_status == "Approved":
+            return jsonify({
+                "success": False,
+                "message": "Visitor is already approved."
+            }), 400
+
+        # 🔥 STEP 2: Count approved visitors for that date
+        count_row = fetchone("""
+            select count(*) as total
+            from public.visitors
+            where visit_date = %s
+              and status = 'Approved'
+        """, (visit_date,))
+
+        current_count = int(count_row["total"]) if count_row else 0
+
+        # 🔥 STEP 3: Enforce limit (5)
+        if current_count >= 5:
+            return jsonify({
+                "success": False,
+                "message": "⚠️ Limit reached: only 5 approved visitors allowed for this date."
+            }), 400
+
+        # ✅ STEP 4: Approve visitor
         execute("""
             update public.visitors
             set status = 'Approved',
@@ -1308,14 +1346,14 @@ def api_admin_approve(visitor_id):
             where id = %s
         """, (note, decided_by, decided_at, visitor_id))
 
-        # 2) Remove old decision notifications for this visitor (Postgres)
+        # ✅ STEP 5: Remove old notifications
         execute("""
             delete from public.notifications
             where visitor_id = %s
               and type in ('APPROVED', 'DECLINED')
         """, (visitor_id,))
 
-        # 3) Create APPROVED notifications (your helpers)
+        # ✅ STEP 6: Create notifications
         brief = get_visitor_brief(visitor_id)
         if brief:
             body_text = build_notif_body(brief)
@@ -1337,14 +1375,17 @@ def api_admin_approve(visitor_id):
                 visitor_id=visitor_id
             )
 
-        # 4) Get email from Postgres
-        row = fetchone("select email from public.visitors where id = %s", (visitor_id,))
-        if not row:
+        # ✅ STEP 7: Send email
+        row_email = fetchone(
+            "select email from public.visitors where id = %s",
+            (visitor_id,)
+        )
+
+        if not row_email:
             return jsonify({"success": False, "message": "Visitor not found"}), 404
 
-        email = row["email"]
+        email = row_email["email"]
 
-        # 5) Email approved QR link
         qr_link = f"https://emailandmobileapp.onrender.com/generate_qr/{visitor_id}"
 
         subject = "Visit Approved - La Concepcion College"
@@ -1360,7 +1401,11 @@ def api_admin_approve(visitor_id):
         if not success:
             print("Approval email failed:", msg)
 
-        return jsonify({"success": True, "message": "Approved", "note_saved": bool(note)})
+        return jsonify({
+            "success": True,
+            "message": "Approved",
+            "note_saved": bool(note)
+        })
 
     except Exception as e:
         print("api_admin_approve error:", e)
