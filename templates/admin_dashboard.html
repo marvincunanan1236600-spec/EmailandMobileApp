@@ -282,8 +282,16 @@ function disableDate() {
     const date = document.getElementById("disableDate").value;
     const reason = document.getElementById("disableReason").value;
 
+    // Check if date is missing
     if (!date) {
         alert("Please select a date.");
+        return;
+    }
+
+    // NEW: Check if reason is missing or just empty spaces
+    if (!reason.trim()) {
+        alert("Please provide a reason for disabling this date.");
+        document.getElementById("disableReason").focus(); // Put the cursor in the box
         return;
     }
 
@@ -295,6 +303,9 @@ function disableDate() {
     .then(res => res.json())
     .then(data => {
         alert("Date disabled successfully!");
+        // Optional: Clear the fields after success
+        document.getElementById("disableDate").value = "";
+        document.getElementById("disableReason").value = "";
     })
     .catch(err => {
         console.error(err);
