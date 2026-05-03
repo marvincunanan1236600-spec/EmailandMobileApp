@@ -191,8 +191,10 @@ tr:hover {
     <input type="date" id="disableDate" required>
 
     <input type="text" id="disableReason"
-           placeholder="Reason (optional)"
-           style="padding:6px; border-radius:6px;">
+       name="disableReason"
+       placeholder="Reason (Required)"
+       style="padding:6px; border-radius:6px;"
+       required>
 
     <button onclick="disableDate()"
             style="padding:8px 15px; background:#dc3545; color:white; border:none; border-radius:6px;">
