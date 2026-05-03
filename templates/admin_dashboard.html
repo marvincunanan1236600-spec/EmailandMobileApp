@@ -58,6 +58,35 @@ tr:hover {
     background-color: rgba(0,123,255,0.1);
 }
 
+.analytics-card {
+    background: rgba(255, 255, 255, 0.9); /* White background with 90% opacity */
+    padding: 20px;
+    border-radius: 10px;
+    margin-top: 40px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    color: #333; /* Ensures text inside is dark and readable */
+}
+
+.analytics-card h2 {
+    color: #007bff !important; /* Forces the title to be blue instead of white */
+    margin-top: 0 !important;
+}
+
+/* Style the buttons to look more consistent */
+.chart-controls button {
+    padding: 8px 15px;
+    margin: 5px;
+    background: #007bff;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+.chart-controls button:hover {
+    background: #0056b3;
+}
+
 
 
         h1 {
@@ -262,18 +291,19 @@ tr:hover {
 {% endfor %}
 </table>
 
-            <h2 style="color:white; text-align:center; margin-top:40px;">
-    Visitor Analytics
-</h2>
+            <div class="analytics-card">
+    <h2>Visitor Analytics</h2>
 
-<div style="text-align:center; margin-bottom:10px;">
-    <button onclick="loadChart('day')">Day</button>
-    <button onclick="loadChart('week')">Week</button>
-    <button onclick="loadChart('month')">Month</button>
-    <button onclick="loadChart('year')">Year</button>
+    <div class="chart-controls" style="text-align:center; margin-bottom:20px;">
+        <button onclick="loadChart('day')">Day</button>
+        <button onclick="loadChart('week')">Week</button>
+        <button onclick="loadChart('month')">Month</button>
+        <button onclick="loadChart('year')">Year</button>
+    </div>
+
+    <!-- The white background of the card makes the chart visible -->
+    <canvas id="visitorChart" height="100"></canvas>
 </div>
-
-<canvas id="visitorChart" height="100"></canvas>
 
         </div>
     </div>
